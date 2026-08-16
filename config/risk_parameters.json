@@ -1,1 +1,301 @@
+## Risk Parameters Configuration (`config/risk_parameters.json`)
 
+The `risk_parameters.json` file governs automated pre-trade compliance checks, statutory diversification mandates, active risk budgets, and derivatives exposure limits under federal securities regulations.
+
+---
+
+### Key Schema Elements
+
+* **`statutory_diversification` (Subchapter M 5/50 Rule):**
+  * `single_issuer_max_weight`: Enforces a hard cap ensuring no single issuer exceeds 25% of total fund assets.
+  * `concentrated_issuers_aggregate_cap`: Restricts the aggregate weight of all issuers representing >5% of the fund to remain strictly below 50%.
+* **`portfolio_risk_controls`:**
+  * `max_portfolio_drawdown_stop`: Portfolio circuit-breaker threshold that triggers an automated de-risking routine or cash allocation.
+  * `annualized_volatility_target`: Target volatility cap used to scale total equity and factor exposure dynamically.
+  * `sector_exposure_cap`: Maximum allowable allocation to any single GICS sector.
+  * `factor_tilt_cap_zscore`: Maximum standard deviation allowance for active quantitative factor exposures.
+* **`derivatives_governance` (SEC Rule 18f-4):**
+  * `compliance_designation`: Establishes whether the fund operates as a *Limited Derivatives User* (<10% notional exposure) or under a *Full Derivatives Risk Management Program*.
+  * `max_relative_var_multiplier`: Caps the fund's Value-at-Risk relative to its designated reference benchmark (max 200% under standard Rule 18f-4 guidelines).
+  * `max_absolute_var`: Maximum 20-day 99% confidence level VaR limit (max 20% of net assets if using absolute VaR testing).
+
+---
+
+### Configuration Blueprint (`config/risk_parameters.json`)
+
+```json
+{
+  "version": "1.0.0",
+  "statutory_diversification": {
+    "regime": "IRC_Subchapter_M",
+    "single_issuer_max_weight": 0.25,
+    "concentrated_issuer_threshold": 0.05,
+    "concentrated_issuers_aggregate_cap": 0.50,
+    "cash_and_treasuries_exempt": true
+  },
+  "portfolio_risk_controls": {
+    "max_portfolio_drawdown_stop": 0.15,
+    "annualized_volatility_target": 0.18,
+    "sector_exposure_cap": 0.30,
+    "factor_tilt_cap_zscore": 2.00,
+    "cash_sweep_trigger_on_violation": true
+  },
+  "derivatives_governance": {
+    "sec_rule": "18f-4",
+    "compliance_designation": "full_derivatives_user",
+    "var_model": {
+      "type": "relative_var",
+      "benchmark_ticker": "SPY",
+      "confidence_level": 0.99,
+      "time_horizon_days": 20,
+      "max_relative_var_multiplier": 2.00,
+      "absolute_var_fallback_cap": 0.20
+    },
+    "leverage_limits": {
+      "max_gross_notional_derivatives_pct": 1.00,
+      "stress_testing_frequency": "daily"
+    }
+  }
+}
+
+import json
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Any, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class ComplianceResult:
+    is_compliant: bool
+    violations: List[str]
+    metrics: Dict[str, Any]
+
+
+class RiskComplianceEngine:
+    """
+    Evaluates portfolio positions and historical returns against the
+    risk parameters configured in risk_parameters.json.
+    """
+
+    def __init__(self, config_path: str = "config/risk_parameters.json"):
+        with open(config_path, "r") as f:
+            self.config = json.load(f)
+        
+        self.sub_m = self.config["statutory_diversification"]
+        self.port_risk = self.config["portfolio_risk_controls"]
+        self.deriv_gov = self.config["derivatives_governance"]
+
+    def verify_subchapter_m(self, weights_df: pd.DataFrame) -> ComplianceResult:
+        """
+        Validates IRC Subchapter M (5/50 rule) diversification:
+          1. No single issuer > 25% of total portfolio.
+          2. Aggregate of all issuers > 5% must not exceed 50% of total portfolio.
+        
+        Expected DataFrame columns: ['issuer_id', 'weight', 'is_exempt']
+        """
+        violations = []
+        df = weights_df.copy()
+
+        # Group by issuer to aggregate multi-asset or derivatives positions per company
+        issuer_weights = df.groupby("issuer_id").agg({
+            "weight": "sum",
+            "is_exempt": "first"
+        }).reset_index()
+
+        # Filter exempt assets (e.g., U.S. Treasuries, Cash)
+        if self.sub_m.get("cash_and_treasuries_exempt", True):
+            testable = issuer_weights[~issuer_weights["is_exempt"]]
+        else:
+            testable = issuer_weights
+
+        max_single_cap = self.sub_m["single_issuer_max_weight"]
+        threshold_5pct = self.sub_m["concentrated_issuer_threshold"]
+        agg_cap_50pct = self.sub_m["concentrated_issuers_aggregate_cap"]
+
+        # Rule 1: Single Issuer <= 25%
+        over_25 = testable[testable["weight"] > max_single_cap]
+        if not over_25.empty:
+            for _, row in over_25.iterrows():
+                violations.append(
+                    f"Subchapter M Violation: Issuer {row['issuer_id']} weight "
+                    f"({row['weight']:.2%}) exceeds 25% cap ({max_single_cap:.2%})."
+                )
+
+        # Rule 2: Aggregate of issuers > 5% must be <= 50%
+        concentrated = testable[testable["weight"] > threshold_5pct]
+        agg_concentrated_weight = concentrated["weight"].sum()
+
+        if agg_concentrated_weight > agg_cap_50pct:
+            violations.append(
+                f"Subchapter M Violation: Aggregate weight of >5% issuers "
+                f"({agg_concentrated_weight:.2%}) exceeds 50% threshold ({agg_cap_50pct:.2%})."
+            )
+
+        metrics = {
+            "max_issuer_weight": float(testable["weight"].max()) if not testable.empty else 0.0,
+            "aggregate_concentrated_weight": float(agg_concentrated_weight),
+            "concentrated_issuers_count": len(concentrated)
+        }
+
+        return ComplianceResult(
+            is_compliant=len(violations) == 0,
+            violations=violations,
+            metrics=metrics
+        )
+
+    def verify_portfolio_risk(
+        self,
+        nav_series: pd.Series,
+        daily_returns: pd.Series,
+        sector_weights: pd.DataFrame,
+        factor_zscores: Optional[Dict[str, float]] = None
+    ) -> ComplianceResult:
+        """
+        Evaluates drawdown stop, annualized volatility target, sector limits, and factor tilts.
+        """
+        violations = []
+        metrics = {}
+
+        # 1. Max Drawdown Calculation
+        rolling_max = nav_series.cummax()
+        drawdowns = (nav_series - rolling_max) / rolling_max
+        current_drawdown = abs(drawdowns.iloc[-1])
+        max_dd_allowed = self.port_risk["max_portfolio_drawdown_stop"]
+        metrics["current_drawdown"] = float(current_drawdown)
+
+        if current_drawdown > max_dd_allowed:
+            violations.append(
+                f"Drawdown Breach: Current drawdown ({current_drawdown:.2%}) "
+                f"exceeds limit ({max_dd_allowed:.2%})."
+            )
+
+        # 2. Annualized Volatility Check (252 trading days)
+        ann_vol = daily_returns.std() * np.sqrt(252)
+        vol_target = self.port_risk["annualized_volatility_target"]
+        metrics["annualized_volatility"] = float(ann_vol)
+
+        if ann_vol > vol_target:
+            violations.append(
+                f"Volatility Breach: Annualized volatility ({ann_vol:.2%}) "
+                f"exceeds target ({vol_target:.2%})."
+            )
+
+        # 3. Sector Exposure Cap
+        # Expected sector_weights columns: ['sector', 'weight']
+        sector_cap = self.port_risk["sector_exposure_cap"]
+        over_sector = sector_weights[sector_weights["weight"] > sector_cap]
+        metrics["max_sector_weight"] = float(sector_weights["weight"].max())
+
+        if not over_sector.empty:
+            for _, row in over_sector.iterrows():
+                violations.append(
+                    f"Sector Cap Breach: Sector '{row['sector']}' weight "
+                    f"({row['weight']:.2%}) exceeds {sector_cap:.2%} cap."
+                )
+
+        # 4. Factor Exposure Tilts
+        if factor_zscores:
+            factor_cap = self.port_risk["factor_tilt_cap_zscore"]
+            for factor, zscore in factor_zscores.items():
+                if abs(zscore) > factor_cap:
+                    violations.append(
+                        f"Factor Tilt Breach: Factor '{factor}' Z-score ({zscore:.2f}) "
+                        f"exceeds cap (+/-{factor_cap:.2f})."
+                    )
+
+        return ComplianceResult(
+            is_compliant=len(violations) == 0,
+            violations=violations,
+            metrics=metrics
+        )
+
+    def verify_rule_18f4_derivatives(
+        self,
+        fund_returns: pd.Series,
+        benchmark_returns: pd.Series,
+        gross_derivatives_notional_pct: float
+    ) -> ComplianceResult:
+        """
+        Validates SEC Rule 18f-4 compliance:
+          - Relative VaR <= 200% of benchmark VaR (or fallback absolute VaR <= 20%).
+          - Gross notional leverage checks.
+        """
+        violations = []
+        metrics = {}
+
+        var_cfg = self.deriv_gov["var_model"]
+        confidence = var_cfg["confidence_level"]
+        horizon = var_cfg["time_horizon_days"]
+        max_rel_var = var_cfg["max_relative_var_multiplier"]
+
+        # Calculate parametric 20-day Value-at-Risk at specified confidence level
+        z_score = 2.3263 if confidence == 0.99 else 1.6449
+        
+        fund_var_20d = abs(fund_returns.mean() * horizon - (fund_returns.std() * np.sqrt(horizon) * z_score))
+        bench_var_20d = abs(benchmark_returns.mean() * horizon - (benchmark_returns.std() * np.sqrt(horizon) * z_score))
+
+        metrics["fund_20d_99pct_var"] = float(fund_var_20d)
+        metrics["benchmark_20d_99pct_var"] = float(bench_var_20d)
+
+        # Relative VaR Test
+        if bench_var_20d > 0:
+            relative_var_ratio = fund_var_20d / bench_var_20d
+            metrics["relative_var_ratio"] = float(relative_var_ratio)
+            if relative_var_ratio > max_rel_var:
+                violations.append(
+                    f"Rule 18f-4 Breach: Relative VaR ({relative_var_ratio:.2f}x) "
+                    f"exceeds regulatory limit ({max_rel_var:.2f}x)."
+                )
+
+        # Absolute VaR Fallback Test
+        abs_cap = var_cfg["absolute_var_fallback_cap"]
+        if fund_var_20d > abs_cap:
+            violations.append(
+                f"Rule 18f-4 Breach: Absolute VaR ({fund_var_20d:.2%}) "
+                f"exceeds fallback cap ({abs_cap:.2%})."
+            )
+
+        # Gross Notional Leverage Test
+        max_notional = self.deriv_gov["leverage_limits"]["max_gross_notional_derivatives_pct"]
+        metrics["gross_notional_derivatives_pct"] = float(gross_derivatives_notional_pct)
+        if gross_derivatives_notional_pct > max_notional:
+            violations.append(
+                f"Derivatives Leverage Breach: Gross notional ({gross_derivatives_notional_pct:.2%}) "
+                f"exceeds limit ({max_notional:.2%})."
+            )
+
+        return ComplianceResult(
+            is_compliant=len(violations) == 0,
+            violations=violations,
+            metrics=metrics
+        )
+
+    def run_full_pre_trade_audit(
+        self,
+        weights_df: pd.DataFrame,
+        nav_series: pd.Series,
+        fund_daily_returns: pd.Series,
+        bench_daily_returns: pd.Series,
+        sector_weights: pd.DataFrame,
+        gross_derivatives_notional_pct: float,
+        factor_zscores: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Any]:
+        """
+        Executes a comprehensive pre-trade validation sweep across all risk dimensions.
+        """
+        sub_m_res = self.verify_subchapter_m(weights_df)
+        port_res = self.verify_portfolio_risk(nav_series, fund_daily_returns, sector_weights, factor_zscores)
+        deriv_res = self.verify_rule_18f4_derivatives(fund_daily_returns, bench_daily_returns, gross_derivatives_notional_pct)
+
+        all_violations = sub_m_res.violations + port_res.violations + deriv_res.violations
+        overall_pass = sub_m_res.is_compliant and port_res.is_compliant and deriv_res.is_compliant
+
+        return {
+            "passed_all_checks": overall_pass,
+            "total_violations": len(all_violations),
+            "violations_log": all_violations,
+            "subchapter_m": sub_m_res.__dict__,
+            "portfolio_risk": port_res.__dict__,
+            "rule_18f_4": deriv_res.__dict__
+        }
