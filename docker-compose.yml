@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    volumes:
+      - ./:/app
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    command: ["streamlit","run","console/app.py","--server.port","8501","--server.headless","true"]

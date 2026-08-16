@@ -1,0 +1,15 @@
+[project]
+name = "edge-tf-core"
+version = "0.1.0"
+description = "EDGE-TF disclosure agent engine - scaffold"
+dependencies = [
+    "numpy>=1.25",
+    "pandas>=2.2",
+    "networkx>=3.0",
+    "streamlit>=1.24",
+    "requests>=2.30"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

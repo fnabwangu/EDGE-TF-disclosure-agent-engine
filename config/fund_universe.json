@@ -1,0 +1,5 @@
+{
+  "funds": [
+    {"ticker": "ABC", "name": "Example Thematic ETF", "id": "ETF-EX-001"}
+  ]
+}
