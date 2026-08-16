@@ -1,1 +1,16 @@
 # keep data directories in repo
+## Raw Ingestion Data Storage (`data/raw/.gitkeep`)
+
+The `data/raw/` directory serves as the landing zone for unadjusted, point-in-time upstream data payloads ingested from market data providers, exchange feeds, custodian SFTP transfers, and broker FIX drop copies.
+
+---
+
+### Directory Purpose & Operational Scope
+
+* **`Market Data Ingestion`**: Retains raw tick, minute, and daily bar feeds, unadjusted closing prices, corporate action feeds, and raw option chains prior to ETL pipelines.
+* **`Custodian & AP Payloads`**: Stores incoming raw custodian cash balances, share counts, settlement files, and Authorized Participant order notifications.
+* **`Idempotency & Replayability`**: Serves as the source-of-truth cache allowing quantitative models and compliance engines to replay past rebalance calculations from raw provider state without lookahead bias.
+* **`Version Control`**: The `.gitkeep` placeholder preserves the directory structure across deployments while ensuring raw binary and structured data artifacts (`*.parquet`, `*.csv`, `*.json`, `*.tar.gz`) remain excluded by `.gitignore`.
+# data/raw/.gitkeep
+# This placeholder file ensures the raw data ingestion directory is tracked by Git.
+# Raw external data payloads (*.parquet, *.csv, *.json, *.gz) should remain untracked via .gitignore.
