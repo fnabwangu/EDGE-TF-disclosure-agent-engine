@@ -1,1 +1,17 @@
 # keep decision records dir
+## Decision Records Storage (`data/decision_records/.gitkeep`)
+
+The `data/decision_records/` directory serves as the audit logging repository for all systematic alpha allocations, human-in-the-loop (HITL) sign-offs, pre-trade compliance checks, and emergency override actions.
+
+---
+
+### Directory Purpose & Compliance Scope
+
+* **`Rebalance Decision Logs`**: Records point-in-time alpha factor rankings, target weight derivations, buffer band suppression logs, and lot rounding calculations.
+* **`Signatory Audit Trail`**: Persists cryptographic signature hashes, timestamps, role authorizations, and approval notes from CCO and PM sign-offs.
+* **`Pre-Trade Compliance Snapshots`**: Archives compliance audit reports for IRC Subchapter M (5/50 rule), SEC Rule 18f-4 (VaR), and SEC Rule 35d-1 (Names Rule).
+* **`Regulatory Compliance (SEC Books & Records)`**: Supports immutable recordkeeping under SEC Rule 204-2 / Investment Company Act Rule 31a-1 (7-year retention).
+* **`Version Control`**: The `.gitkeep` placeholder ensures the directory structure is maintained in source control while local execution artifacts (*.json, *.parquet, *.log) are excluded via `.gitignore`.
+# data/decision_records/.gitkeep
+# This placeholder file ensures the decision records directory is tracked by Git.
+# Actual decision logs and signature hashes (*.json, *.parquet) should remain untracked via .gitignore.
