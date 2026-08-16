@@ -1,1 +1,15 @@
-# keep data directories in repo
+## Canonical Data Storage (`data/canonical/.gitkeep`)
+
+The `data/canonical/` directory serves as the immutable local repository for audited regulatory baseline datasets, historical daily Net Asset Value (NAV) records, point-in-time constituent universes, and published Portfolio Composition Files (PCFs).
+
+---
+
+### Directory Purpose & Governance
+
+* **`Audited Baselines`**: Stores gold-standard historical master data (corporate actions, share counts, split-adjusted prices) used to benchmark backtests and regulatory audits.
+* **`PCF Archives`**: Houses daily immutable snapshots of generated creation/redemption baskets transmitted to Authorized Participants (APs).
+* **`Regulatory Hold Requirement`**: Files placed in this directory are typically flagged for write-once, read-many (WORM) retention to comply with SEC 7-year audit retention mandates.
+* **`Version Control`**: The `.gitkeep` file ensures Git tracks this critical directory structure even when raw parquet/CSV data artifacts are excluded via `.gitignore`.
+# data/canonical/.gitkeep
+# This placeholder file ensures the canonical data directory is tracked by Git.
+# Actual data payloads (*.parquet, *.csv, *.json) should remain untracked via .gitignore.# keep data directories in repo
