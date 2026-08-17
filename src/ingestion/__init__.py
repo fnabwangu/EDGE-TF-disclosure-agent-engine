@@ -1,6 +1,4 @@
-# src/ingestion/__init__.py
-"""
-EDGE-TF Disclosure Agent Engine - Data Ingestion & Normalization Module.
+"""EDGE-TF Disclosure Agent Engine - Data Ingestion & Normalization Module.
 
 Handles multi-source market data ingestion, corporate filings (SEC EDGAR),
 real-time and historical pricing, options chains, and canonical schema harmonization.
@@ -17,6 +15,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 
 class DataSourceType(str, Enum):
+    """Enumeration of supported data source types."""
     BROKER_API = "BROKER_API"
     MARKET_DATA_FEED = "MARKET_DATA_FEED"
     SEC_EDGAR = "SEC_EDGAR"
@@ -25,6 +24,7 @@ class DataSourceType(str, Enum):
 
 @dataclass
 class MarketDataSnapshot:
+    """Real-time market data snapshot for a single security."""
     ticker: str
     timestamp_utc: str
     last_price: float
@@ -38,6 +38,7 @@ class MarketDataSnapshot:
 
 @dataclass
 class IngestionBatchReport:
+    """Summary report of a data ingestion batch."""
     batch_id: str
     timestamp_utc: str
     source: DataSourceType
@@ -90,4 +91,4 @@ __all__ = [
     "MarketDataSnapshot",
     "IngestionBatchReport",
     "DataIngestionEngine",
-]# ingestion package
+]
