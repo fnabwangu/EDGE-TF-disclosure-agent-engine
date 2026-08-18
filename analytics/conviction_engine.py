@@ -21,7 +21,7 @@ from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 
-from core.schemas import ConvictionInputs, ConvictionResult, EventProbability
+from core.schemas import ConvictionInputs, ConvictionResult, EventProbability, LeverageLimits
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,11 @@ class ConvictionEngine:
         )
         if not 0.0 <= self.ambiguity_penalty_weight <= 1.0:
             raise ValueError("ambiguity_penalty_weight must be in [0, 1].")
+
+        default_limits = config.get("default_leverage_limits")
+        self.default_leverage_limits: Optional[LeverageLimits] = (
+            LeverageLimits(**default_limits) if default_limits else None
+        )
 
     @staticmethod
     def _load_config(config_path: Optional[Path]) -> Dict[str, Any]:

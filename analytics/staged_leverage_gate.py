@@ -14,7 +14,7 @@ risk/exposure_reduction_engine.py) that can only ever reduce this target.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Protocol
 
 from analytics.leverage_tranches import EvidenceState, LeveragePolicy
 
@@ -27,6 +27,10 @@ class StagedLeverageInputs:
     thesis_active: bool
     catalyst_active: bool
     market_confirmation: bool
+    # Optional fields consumed only by alternative signal gates (e.g.
+    # CapitalFlowSignalGate); StagedLeverageGate itself ignores them.
+    event_probability: float = 1.0
+    flow_progress: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,12 @@ class StagedLeverageDecision:
     signal_target_leverage: float
     entry_permitted: bool
     reason_codes: List[str] = field(default_factory=list)
+
+
+class SignalLeverageGate(Protocol):
+    """Any signal-side gate DynamicExposureController can be configured with."""
+
+    def evaluate(self, inputs: StagedLeverageInputs) -> StagedLeverageDecision: ...
 
 
 class StagedLeverageGate:
@@ -58,6 +68,9 @@ class StagedLeverageGate:
 
         target = self.policy.target_for(inputs.evidence_state)
         return StagedLeverageDecision(target, True, [f"SIGNAL_TARGET_{inputs.evidence_state.value}"])
+
+
+__all__ = ["StagedLeverageInputs", "StagedLeverageDecision", "SignalLeverageGate", "StagedLeverageGate"]
 
 
 __all__ = ["StagedLeverageInputs", "StagedLeverageDecision", "StagedLeverageGate"]

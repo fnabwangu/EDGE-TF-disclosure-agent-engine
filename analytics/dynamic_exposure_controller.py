@@ -9,11 +9,13 @@ update:
     TargetExposure_t = min(SignalExposure_t, RiskExposure_t, ProfitProtectedExposure_t)
 
 Evidence-state improvements only ever open the door to more leverage
-(SignalExposure, via StagedLeverageGate). Risk caps (LeverageEngine) and
-profit-taking (ProfitTakingEngine + ExposureReductionEngine) can always cut
-exposure below that door regardless of conviction. New tranches are only
-opened for the incremental leverage newly unlocked; exits unwind the
-highest-risk tranches first.
+(SignalExposure, via a SignalLeverageGate -- StagedLeverageGate's flat,
+conservative policy by default, or an opt-in alternative such as
+CapitalFlowSignalGate for an aggressive banded policy). Risk caps
+(LeverageEngine) and profit-taking (ProfitTakingEngine +
+ExposureReductionEngine) can always cut exposure below that door regardless
+of conviction. New tranches are only opened for the incremental leverage
+newly unlocked; exits unwind the highest-risk tranches first.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from uuid import uuid4
 from analytics.leverage_engine import LeverageDecision, LeverageEngine
 from analytics.leverage_tranches import EvidenceState, LeverageTranche, TrancheBook
 from analytics.profit_taking_engine import ProfitTakingEngine
-from analytics.staged_leverage_gate import StagedLeverageGate, StagedLeverageInputs
+from analytics.staged_leverage_gate import SignalLeverageGate, StagedLeverageGate, StagedLeverageInputs
 from core.schemas import LeverageLimits, ProfitTakingInputs, ProfitTakingResult
 from risk.exposure_reduction_engine import ExposureReductionEngine, ExposureReductionResult
 
@@ -50,12 +52,12 @@ class DynamicExposureController:
 
     def __init__(
         self,
-        staged_gate: Optional[StagedLeverageGate] = None,
+        staged_gate: Optional[SignalLeverageGate] = None,
         leverage_engine: Optional[LeverageEngine] = None,
         profit_engine: Optional[ProfitTakingEngine] = None,
         book: Optional[TrancheBook] = None,
     ):
-        self.staged_gate = staged_gate or StagedLeverageGate()
+        self.staged_gate: SignalLeverageGate = staged_gate or StagedLeverageGate()
         self.leverage_engine = leverage_engine or LeverageEngine()
         self.profit_engine = profit_engine or ProfitTakingEngine()
         self.book = book or TrancheBook()
@@ -80,6 +82,8 @@ class DynamicExposureController:
         maximum_executable_notional: float,
         current_return: float,
         generic_projected_return: float,
+        event_probability: float = 1.0,
+        flow_progress: float = 0.0,
     ) -> DynamicExposureResult:
         reason_codes: List[str] = []
         leverage_before = self.book.current_leverage
@@ -93,6 +97,8 @@ class DynamicExposureController:
                 thesis_active=thesis_active,
                 catalyst_active=catalyst_active,
                 market_confirmation=market_confirmation,
+                event_probability=event_probability,
+                flow_progress=flow_progress,
             )
         )
         reason_codes.extend(staged_decision.reason_codes)

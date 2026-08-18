@@ -27,6 +27,7 @@ from typing import Dict, List, Optional
 
 from analytics.dynamic_exposure_controller import DynamicExposureController, DynamicExposureResult
 from analytics.leverage_tranches import EvidenceState
+from analytics.staged_leverage_gate import SignalLeverageGate
 from core.schemas import LeverageLimits
 
 
@@ -111,6 +112,8 @@ class SleeveEvaluationInputs:
     current_return: float
     generic_projected_return: float
     data_available: bool = True
+    event_probability: float = 1.0
+    flow_progress: float = 0.0
 
 
 @dataclass
@@ -127,6 +130,11 @@ class MultiSleevePortfolioEngine:
     caps, tranches, profit-taking) independently. This engine adds only:
 
         Gross_t = sum(|Exposure_s,t|) / NAV_t  <=  GrossMax
+
+    By default every sleeve uses the conservative flat StagedLeverageGate.
+    Pass ``signal_gates`` to opt individual sleeves into an alternative
+    SignalLeverageGate (e.g. CapitalFlowSignalGate for an aggressive banded
+    policy) -- a high-leverage profile is always opt-in, never the default.
     """
 
     def __init__(
@@ -134,6 +142,7 @@ class MultiSleevePortfolioEngine:
         sleeve_policies: Dict[SleeveType, SleevePolicy],
         max_gross_leverage: float,
         max_portfolio_loss_pct: float,
+        signal_gates: Optional[Dict[SleeveType, SignalLeverageGate]] = None,
     ):
         if not sleeve_policies:
             raise ValueError("MultiSleevePortfolioEngine requires at least one sleeve policy")
@@ -142,8 +151,9 @@ class MultiSleevePortfolioEngine:
         self.sleeve_policies = sleeve_policies
         self.max_gross_leverage = max_gross_leverage
         self.max_portfolio_loss_pct = max_portfolio_loss_pct
+        signal_gates = signal_gates or {}
         self.controllers: Dict[SleeveType, DynamicExposureController] = {
-            sleeve: DynamicExposureController() for sleeve in sleeve_policies
+            sleeve: DynamicExposureController(staged_gate=signal_gates.get(sleeve)) for sleeve in sleeve_policies
         }
 
     def update(
@@ -201,6 +211,8 @@ class MultiSleevePortfolioEngine:
                 maximum_executable_notional=inputs.maximum_executable_notional,
                 current_return=inputs.current_return,
                 generic_projected_return=inputs.generic_projected_return,
+                event_probability=inputs.event_probability,
+                flow_progress=inputs.flow_progress,
             )
             sleeve_results[sleeve] = result
             reason_codes.extend(result.reason_codes)

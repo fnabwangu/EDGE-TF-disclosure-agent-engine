@@ -33,10 +33,11 @@ from .monthly_leverage_simulation import (
 )
 from .profit_taking_engine import ProfitTakingEngine, ProfitTakingThresholds, evaluate_profit_taking
 from .leverage_tranches import EvidenceState, EvidenceStateThresholds, LeveragePolicy, LeverageTranche, TrancheBook
-from .staged_leverage_gate import StagedLeverageDecision, StagedLeverageGate, StagedLeverageInputs
+from .staged_leverage_gate import SignalLeverageGate, StagedLeverageDecision, StagedLeverageGate, StagedLeverageInputs
 from .dynamic_exposure_controller import DynamicExposureController, DynamicExposureResult
 from .capital_flow_leverage_engine import (
     CapitalFlowLeverageEngine,
+    CapitalFlowSignalGate,
     DeploymentDecision,
     DeploymentInputs,
     DeploymentPolicy,
@@ -99,9 +100,11 @@ __all__ = [
     "StagedLeverageDecision",
     "StagedLeverageGate",
     "StagedLeverageInputs",
+    "SignalLeverageGate",
     "DynamicExposureController",
     "DynamicExposureResult",
     "CapitalFlowLeverageEngine",
+    "CapitalFlowSignalGate",
     "DeploymentDecision",
     "DeploymentInputs",
     "DeploymentPolicy",

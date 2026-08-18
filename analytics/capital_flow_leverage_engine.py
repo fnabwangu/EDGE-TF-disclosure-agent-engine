@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
 from analytics.leverage_tranches import EvidenceState
+from analytics.staged_leverage_gate import StagedLeverageDecision, StagedLeverageInputs
 
 
 @dataclass(frozen=True)
@@ -164,10 +165,53 @@ class CapitalFlowLeverageEngine:
         )
 
 
+class CapitalFlowSignalGate:
+    """Adapts CapitalFlowLeverageEngine to the SignalLeverageGate interface.
+
+    This is what lets DynamicExposureController opt into the aggressive
+    band-based (up to 10x) capital-flow curve instead of the conservative
+    flat StagedLeverageGate/LeveragePolicy default. It is never the default
+    signal gate -- callers must explicitly construct one, matching the rule
+    that a high-leverage profile is a separate, opt-in policy.
+
+    Risk caps are intentionally left uncapped here (float("inf")): the real
+    risk-cap stage is DynamicExposureController's own LeverageEngine step,
+    applied independently after this gate returns its requested leverage.
+    """
+
+    def __init__(self, engine: Optional[CapitalFlowLeverageEngine] = None):
+        self.engine = engine or CapitalFlowLeverageEngine()
+
+    def evaluate(self, inputs: StagedLeverageInputs) -> StagedLeverageDecision:
+        decision = self.engine.calculate(
+            DeploymentInputs(
+                event_probability=inputs.event_probability,
+                remaining_ev=inputs.remaining_ev,
+                minimum_remaining_ev=inputs.minimum_remaining_ev,
+                flow_state=inputs.evidence_state,
+                flow_progress=inputs.flow_progress,
+                thesis_active=inputs.thesis_active,
+                catalyst_active=inputs.catalyst_active,
+                absolute_leverage_cap=float("inf"),
+                loss_cap_leverage=float("inf"),
+                volatility_cap_leverage=float("inf"),
+                liquidity_cap_leverage=float("inf"),
+                concentration_cap_leverage=float("inf"),
+                portfolio_cap_leverage=float("inf"),
+            )
+        )
+        return StagedLeverageDecision(
+            signal_target_leverage=decision.requested_leverage,
+            entry_permitted=decision.permitted,
+            reason_codes=list(decision.reason_codes),
+        )
+
+
 __all__ = [
     "LeverageBand",
     "DeploymentPolicy",
     "DeploymentInputs",
     "DeploymentDecision",
     "CapitalFlowLeverageEngine",
+    "CapitalFlowSignalGate",
 ]
