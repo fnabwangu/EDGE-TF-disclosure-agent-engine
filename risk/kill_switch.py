@@ -72,6 +72,7 @@ class EmergencyKillSwitchEngine:
         state_path: Optional[Path] = None,
         execution_control: Optional[ExecutionControl] = None,
         authorization_verifier: Optional[Callable[[str, str, str], bool]] = None,
+        environment: str = "research",
     ):
         self.rejection_threshold = consecutive_rejection_threshold
         self.authorized_roles = authorized_reset_roles or {
@@ -89,6 +90,11 @@ class EmergencyKillSwitchEngine:
         self.state_path = Path(state_path) if state_path else None
         self.execution_control = execution_control
         self.authorization_verifier = authorization_verifier
+        if environment not in {"research", "production"}:
+            raise ValueError("environment must be 'research' or 'production'")
+        if environment == "production" and (self.state_path is None or self.execution_control is None or self.authorization_verifier is None):
+            raise ValueError("Production kill switch requires state_path, execution_control, and authorization_verifier.")
+        self.environment = environment
         self.control_actions: Dict[str, str] = {}
         self._load_state()
 

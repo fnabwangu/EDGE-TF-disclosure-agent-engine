@@ -183,9 +183,16 @@ class DisclosureNormalizer:
         )
 
         res_df["expected_shares"] = res_df["lagged_shares_held"] * scaling_ratio
-        
-        # Active Quantity Deviation: Difference between actual shares and flow-scaled shares
-        res_df["aqd"] = res_df[shares_held_col] - res_df["expected_shares"].fillna(0.0)
+
+        # A first observation has no prior q or N and cannot support an AQD.
+        has_prior_observation = res_df["lagged_shares_held"].notna() & res_df["lagged_etf_shares"].notna()
+        res_df["aqd"] = np.where(
+            has_prior_observation,
+            res_df[shares_held_col] - res_df["expected_shares"],
+            np.nan,
+        )
+        res_df["aqd_valid"] = has_prior_observation
+        res_df["aqd_reason"] = np.where(has_prior_observation, "VALID", "NO_PRIOR_OBSERVATION")
         
         # Drop temporary calculation columns
         res_df = res_df.drop(columns=["lagged_shares_held", "lagged_etf_shares"])
@@ -202,10 +209,21 @@ class DisclosureNormalizer:
         Guarantees zero future-information leakage into backtests or queues.
         """
         filtered_df = df.copy()
-        if timestamp_col in filtered_df.columns:
-            mask = pd.to_datetime(filtered_df[timestamp_col]) <= decision_time
-            return filtered_df[mask].copy()
-        return filtered_df
+        if timestamp_col not in filtered_df.columns:
+            raise ValueError(
+                f"POINT_IN_TIME_BLOCKED: required timestamp '{timestamp_col}' is missing."
+            )
+        timestamps = pd.to_datetime(filtered_df[timestamp_col], errors="coerce", utc=True, format="mixed")
+        if timestamps.isna().any():
+            raise ValueError(
+                f"POINT_IN_TIME_BLOCKED: timestamp '{timestamp_col}' contains invalid values."
+            )
+        decision = pd.Timestamp(decision_time)
+        if decision.tzinfo is None:
+            decision = decision.tz_localize("UTC")
+        else:
+            decision = decision.tz_convert("UTC")
+        return filtered_df[timestamps <= decision].copy()
 
     def process(
         self,
