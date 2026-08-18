@@ -35,6 +35,15 @@ from .profit_taking_engine import ProfitTakingEngine, ProfitTakingThresholds, ev
 from .leverage_tranches import EvidenceState, EvidenceStateThresholds, LeveragePolicy, LeverageTranche, TrancheBook
 from .staged_leverage_gate import StagedLeverageDecision, StagedLeverageGate, StagedLeverageInputs
 from .dynamic_exposure_controller import DynamicExposureController, DynamicExposureResult
+from .multi_sleeve_portfolio_engine import (
+    MultiSleevePortfolioEngine,
+    PortfolioTradeArchitecture,
+    PortfolioUpdateResult,
+    SleeveEvaluationInputs,
+    SleevePolicy,
+    SleeveState,
+    SleeveType,
+)
 
 __all__ = [
     "InstitutionalGraphEngine",
@@ -85,4 +94,11 @@ __all__ = [
     "StagedLeverageInputs",
     "DynamicExposureController",
     "DynamicExposureResult",
+    "MultiSleevePortfolioEngine",
+    "PortfolioTradeArchitecture",
+    "PortfolioUpdateResult",
+    "SleeveEvaluationInputs",
+    "SleevePolicy",
+    "SleeveState",
+    "SleeveType",
 ]
