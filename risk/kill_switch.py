@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 import hashlib
+import json
 import logging
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -61,7 +63,8 @@ class EmergencyKillSwitchEngine:
     def __init__(
         self,
         consecutive_rejection_threshold: int = 3,
-        authorized_reset_roles: Optional[Set[str]] = None
+        authorized_reset_roles: Optional[Set[str]] = None,
+        state_path: Optional[Path] = None,
     ):
         self.rejection_threshold = consecutive_rejection_threshold
         self.authorized_roles = authorized_reset_roles or {
@@ -76,6 +79,35 @@ class EmergencyKillSwitchEngine:
         self.active_trigger_reason: Optional[str] = None
         self.trip_timestamp_utc: Optional[str] = None
         self.reset_signatures: Dict[str, ResetSignature] = {}
+        self.state_path = Path(state_path) if state_path else None
+        self._load_state()
+
+    def _load_state(self) -> None:
+        if self.state_path is None or not self.state_path.exists():
+            return
+        try:
+            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
+            self.state = KillSwitchState(payload["state"])
+            self.consecutive_rejections = int(payload.get("consecutive_rejections", 0))
+            self.active_trigger_reason = payload.get("active_trigger_reason")
+            self.trip_timestamp_utc = payload.get("trip_timestamp_utc")
+        except (OSError, ValueError, KeyError) as exc:
+            self.state = KillSwitchState.TRIPPED_AUTO
+            self.active_trigger_reason = f"[STATE_INVALID] Kill-switch state could not be restored: {exc}"
+
+    def _persist_state(self) -> None:
+        if self.state_path is None:
+            return
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "state": self.state.value,
+            "consecutive_rejections": self.consecutive_rejections,
+            "active_trigger_reason": self.active_trigger_reason,
+            "trip_timestamp_utc": self.trip_timestamp_utc,
+        }
+        temp_path = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
+        temp_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        temp_path.replace(self.state_path)
 
     @property
     def is_locked(self) -> bool:
@@ -125,6 +157,7 @@ class EmergencyKillSwitchEngine:
         logging.critical(
             f"!!! KILL SWITCH TRIPPED !!! -> Trading and AP publications HALTED. Reason: {self.active_trigger_reason}"
         )
+        self._persist_state()
 
     def submit_reset_authorization(
         self,
@@ -181,6 +214,7 @@ class EmergencyKillSwitchEngine:
         self.trip_timestamp_utc = None
         self.consecutive_rejections = 0
         self.reset_signatures.clear()
+        self._persist_state()
 
     def get_telemetry(self) -> KillSwitchTelemetry:
         """Returns structured status telemetry for console dashboards and health checks."""

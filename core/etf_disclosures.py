@@ -4,7 +4,7 @@ The adapter accepts provider payloads with explicit source and availability
 metadata. It does not infer missing denominators or timestamps.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -41,10 +41,11 @@ class StaticETFDisclosureProvider:
 class ETFDisclosureIngestor:
     """Fetch, validate, persist, and flatten provider ETF observations."""
 
-    def __init__(self, provider: ETFDisclosureProvider, raw_dir: str | Path = "data/raw/etf_disclosures", canonical_dir: str | Path = "data/canonical/etf_disclosures"):
+    def __init__(self, provider: ETFDisclosureProvider, raw_dir: str | Path = "data/raw/etf_disclosures", canonical_dir: str | Path = "data/canonical/etf_disclosures", max_snapshot_age: timedelta = timedelta(days=7)):
         self.provider = provider
         self.raw_dir = Path(raw_dir)
         self.canonical_dir = Path(canonical_dir)
+        self.max_snapshot_age = max_snapshot_age
 
     def ingest(self, etf_ticker: str, as_of: datetime) -> ETFDisclosureBundle:
         payload = dict(self.provider.fetch(etf_ticker, as_of))
@@ -54,8 +55,29 @@ class ETFDisclosureIngestor:
                 f"ETF_DISCLOSURE_BLOCKED: shares outstanding missing for {etf_ticker}"
             )
         bundle = ETFDisclosureBundle.model_validate(self._apply_source_defaults(payload))
+        self._validate_availability(bundle, as_of)
         self._persist(etf_ticker, as_of, payload, bundle)
         return bundle
+
+    def _validate_availability(self, bundle: ETFDisclosureBundle, as_of: datetime) -> None:
+        decision_time = as_of if as_of.tzinfo else as_of.replace(tzinfo=timezone.utc)
+        for holding in bundle.holdings:
+            available = holding.information_available_time
+            if available > decision_time or decision_time - available > self.max_snapshot_age:
+                raise ValueError(
+                    f"ETF_DISCLOSURE_BLOCKED: holding disclosure for {holding.etf_ticker} is stale or unavailable at {decision_time.isoformat()}"
+                )
+        for record in bundle.shares_outstanding:
+            available = record.information_available_time
+            if available > decision_time or decision_time - available > self.max_snapshot_age:
+                raise ValueError(
+                    f"ETF_DISCLOSURE_BLOCKED: shares outstanding disclosure for {record.etf_ticker} is stale or unavailable at {decision_time.isoformat()}"
+                )
+        for basket in bundle.baskets:
+            if basket.information_available_time > decision_time:
+                raise ValueError(
+                    f"ETF_DISCLOSURE_BLOCKED: basket disclosure for {basket.etf_ticker} is not available at {decision_time.isoformat()}"
+                )
 
     @staticmethod
     def _apply_source_defaults(payload: Dict[str, Any]) -> Dict[str, Any]:

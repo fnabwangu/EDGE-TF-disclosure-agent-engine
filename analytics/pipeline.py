@@ -53,12 +53,19 @@ def process_disclosure_pipeline(
 
     weights = np.zeros(len(expected_returns), dtype=float)
     if execution_permitted:
-        weights = ConvexPositionOptimizer.optimize_allocation(
-            expected_returns=np.asarray(expected_returns, dtype=float),
-            covariance_matrix=np.asarray(covariance_matrix, dtype=float),
-            max_drawdown_limit=max_drawdown_limit,
-            max_single_position=max_single_position,
-        )
+        try:
+            weights = ConvexPositionOptimizer.optimize_allocation(
+                expected_returns=np.asarray(expected_returns, dtype=float),
+                covariance_matrix=np.asarray(covariance_matrix, dtype=float),
+                max_drawdown_limit=max_drawdown_limit,
+                max_single_position=max_single_position,
+            )
+            if not np.any(np.abs(weights) > 1e-10):
+                execution_permitted = False
+                gate_reason = "NO_TRADE: optimizer infeasible or unavailable"
+        except (RuntimeError, ValueError):
+            execution_permitted = False
+            gate_reason = "NO_TRADE: optimizer failed deterministically"
 
     return {
         "target_ticker": action.target_ticker,
