@@ -1,4 +1,4 @@
-## Console Utilities Interface (`console/utils/__init__.py`)
+"""## Console Utilities Interface (`console/utils/__init__.py`)
 
 The `console/utils/__init__.py` module acts as the public entry point for all formatting helpers, ANSI terminal styling utilities, cryptographic timestamp generators, and numerical transformation routines supporting the **EDGE-TF-disclosure-agent-engine** terminal console.
 
@@ -11,7 +11,7 @@ The `console/utils/__init__.py` module acts as the public entry point for all fo
 * **`generate_audit_hash`**: SHA-256 cryptographic fingerprinting utility for audit logging, sign-offs, and file integrity validation.
 * **`get_utc_timestamp`**: Standardized ISO-8601 UTC timestamp generator.
 * **`safe_divide`**: Zero-division guard for cross-sectional portfolio analytics and rebalance ratios.
-Python
+Python"""
 # console/utils/__init__.py
 """
 EDGE-TF Disclosure Agent Engine - Console Utilities Module.

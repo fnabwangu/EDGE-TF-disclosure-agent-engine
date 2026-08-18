@@ -308,4 +308,3 @@ class TradePostmortemEngine:
         except Exception as e:
             logger.error(f"Failed to archive postmortem record for {report.trade_id}: {e}")
 
-    return diagnostic_report

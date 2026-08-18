@@ -254,4 +254,3 @@ class StrategicDiffusionScorer:
 
         return result_df.sort_values(by="weighted_diffusion_score", ascending=False)
 
-    return results_df.reset_index()

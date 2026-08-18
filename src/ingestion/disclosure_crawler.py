@@ -14,7 +14,7 @@ def fetch_daily_disclosures(url: str):
 
 if __name__ == "__main__":
     print("Run fetch_daily_disclosures(url) to fetch disclosures")
-## SEC EDGAR & Regulatory Disclosure Crawler (`src/ingestion/disclosure_crawler.py`)
+"""## SEC EDGAR & Regulatory Disclosure Crawler (`src/ingestion/disclosure_crawler.py`)
 
 The `disclosure_crawler.py` module extracts regulatory filings (10-K, 10-Q, 8-K, Form 4) and competitor ETF Portfolio Composition Files (PCFs) from SEC EDGAR and market data endpoints. It parses unstructured filing narratives, structures corporate disclosures, computes payload hashes, and routes sanitized data to the `raw` data tier for qualitative hypothesis extraction and compliance auditing.
 
@@ -26,7 +26,7 @@ The `disclosure_crawler.py` module extracts regulatory filings (10-K, 10-Q, 8-K,
 * **`Structured Filing Categorization`**: Classifies documents across statutory forms (10-K, 10-Q, 8-K, 13F, Form 4 insider transactions).
 * **`MD&A & Risk Factor Extraction`**: Strips raw HTML/XBRL tags and isolates Item 7 (MD&A), Item 1A (Risk Factors), and Item 8.01 (Other Events) for hypothesis generation.
 * **`Bi-Temporal Data Storage`**: Persists raw immutable filing payloads under `data/raw/filings/` alongside SHA-256 integrity fingerprints.
-Python
+Python"""
 # src/ingestion/disclosure_crawler.py
 """
 EDGE-TF Disclosure Agent Engine - Regulatory Disclosure & SEC EDGAR Crawler.

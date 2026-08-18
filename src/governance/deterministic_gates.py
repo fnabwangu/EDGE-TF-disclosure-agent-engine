@@ -4,7 +4,7 @@ Hard gates (EV gate, Rebalance filter, Volatility governor) placeholder.
 
 def ev_gate(signal_strength: float, threshold: float) -> bool:
     return signal_strength >= threshold
-Markdown
+"""Markdown
 ## Deterministic Governance Gates (`src/governance/deterministic_gates.py`)
 
 The `deterministic_gates.py` module evaluates programmatic, hard-coded statutory and regulatory constraints before permitting order generation, basket creation, or AP disclosure dispatching. It eliminates non-deterministic model behavior during regulatory evaluation by applying strict mathematical checks across IRC Subchapter M, SEC Rule 18f-4 (VaR), SEC Rule 22e-4 (Liquidity), and SEC Rule 35d-1 (Names Rule).
@@ -18,7 +18,7 @@ The `deterministic_gates.py` module evaluates programmatic, hard-coded statutory
 * **`SEC Rule 22e-4 Liquidity Risk Management`**: Validates illiquid investments do not exceed the 15% statutory threshold and monitors Days-to-Liquid parameters.
 * **`SEC Rule 35d-1 Names Rule Compliance`**: Guarantees that at least 80% of fund assets are allocated directly in alignment with the thematic investment mandate.
 * **`Deterministic Go/No-Go Decision Engine`**: Evaluates all gating logic synchronously and returns a structured diagnostic report.
-Python
+Python"""
 # src/governance/deterministic_gates.py
 """
 EDGE-TF Disclosure Agent Engine - Deterministic Statutory & Regulatory Gates.

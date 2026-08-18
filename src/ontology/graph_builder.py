@@ -9,7 +9,7 @@ def build_graph():
     G.add_node("SEC-ABC", type="security")
     G.add_edge("ETF-EX-001", "SEC-ABC", weight=1.0)
     return G
-## Semantic Knowledge Graph Builder (`src/ontology/graph_builder.py`)
+"""## Semantic Knowledge Graph Builder (`src/ontology/graph_builder.py`)
 
 The `graph_builder.py` module constructs and traverses a directed semantic knowledge graph of regulatory statutes, portfolio entities, corporate relationships, qualitative theses, and risk gates within the **EDGE-TF-disclosure-agent-engine**. It establishes verifiable relationship topologies (e.g., `ISSUED_BY`, `SUBJECT_TO_RULE`, `HEDGED_BY`, `SUPPORTS_THEMATIC_CLUSTER`, `FALSIFIED_BY`) to support statutory compliance checks, parent-subsidiary concentration rollups, and causal risk tracking.
 
@@ -22,7 +22,7 @@ The `graph_builder.py` module constructs and traverses a directed semantic knowl
 * **`Hypothesis & Derivatives Graph Binding`**: Directly links short options overlays and falsification triggers to underlying equity nodes and thematic clusters.
 * **`Graph Export & Path Traversal`**: Provides adjacency exports, neighborhood queries, and path validation algorithms for pre-trade audit trails and compliance dashboards.
 
-# src/ontology/graph_builder.py
+# src/ontology/graph_builder.py"""
 """
 EDGE-TF Disclosure Agent Engine - Semantic Knowledge Graph Builder.
 

@@ -6,7 +6,7 @@ def compute_iav(scores):
     if not scores:
         return 0.0
     return sum(scores) / len(scores)
-## SEC Rule 6c-11 Indicative Intra-Day Value (IIV / INAV) Calculator (`src/quant_engine/iav_calculator.py`)
+"""## SEC Rule 6c-11 Indicative Intra-Day Value (IIV / INAV) Calculator (`src/quant_engine/iav_calculator.py`)
 
 The `iav_calculator.py` module implements continuous real-time calculating and streaming of the **Indicative Intra-Day Value (IIV / INAV / IAV)** for the ETF pursuant to **SEC Rule 6c-11**. It computes real-time portfolio fair-value adjustments across underlying spot equities, delta-adjusted options overlay positions, accrued interest/fees, and cash buffers, publishing pricing telemetry and premium/discount arbitrage signals every 15 seconds.
 
@@ -19,7 +19,7 @@ The `iav_calculator.py` module implements continuous real-time calculating and s
 * **`Arbitrage Band & Dislocation Telemetry`**: Calculates basis point spreads between the current ETF secondary market price and the calculated IAV to identify primary/secondary creation-redemption arbitrage opportunities.
 * **`Creation/Redemption Basket Fair Value Verification`**: Produces exact per-share and per-basket indicative values for Authorized Participants (APs) and market makers.
 
-    # src/quant_engine/iav_calculator.py
+    # src/quant_engine/iav_calculator.py"""
 """
 EDGE-TF Disclosure Agent Engine - Indicative Intra-Day Value (IIV / INAV / IAV) Calculator.
 

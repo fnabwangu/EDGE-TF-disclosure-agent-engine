@@ -4,7 +4,7 @@ Orchestrates sub-agents (placeholder).
 
 def orchestrate():
     return {"status": "ok", "steps": []}
-## Alpha & Inference Orchestration Conductor (`src/inference/conductor.py`)
+"""## Alpha & Inference Orchestration Conductor (`src/inference/conductor.py`)
 
 The `conductor.py` module orchestrates the complete quantitative lifecycle for the **EDGE-TF-disclosure-agent-engine**. It links raw market data ingestion, feature generation, alpha ranking, options overlay selection, adversarial falsification stress-testing, and statutory risk governance into an actionable candidate portfolio rebalance payload ready for Human-in-the-Loop (HITL) authorization.
 
@@ -16,7 +16,7 @@ The `conductor.py` module orchestrates the complete quantitative lifecycle for t
 * **`Constrained Portfolio Weight Allocation`**: Maps cross-sectional alpha rankings into target weights enforcing heuristic statutory caps ($w_i \le 0.25$, $\sum_{w_i > 0.05} w_i \le 0.50$, Names Rule $\ge 80\%$) prior to pre-trade gate validation.
 * **`Derivatives Overlay Formulation`**: Emits covered call writing instructions for held equity long positions and short LEAP put targets for high-conviction names.
 * **`Pre-HITL Regulatory Packaging`**: Assembles a `RebalanceProposal` containing statutory gate audits, falsification reports, and execution-ready order instructions.
-Python
+Python"""
 # src/inference/conductor.py
 """
 EDGE-TF Disclosure Agent Engine - Inference Pipeline Conductor.

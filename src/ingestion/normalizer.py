@@ -322,4 +322,3 @@ class DisclosureNormalizer:
 
     
 
-    return canonical_state_df

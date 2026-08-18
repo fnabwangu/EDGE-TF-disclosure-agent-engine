@@ -10,7 +10,7 @@ def log_decision(record: dict, out_dir: str = "data/decision_records"):
     path = Path(out_dir) / f"decision_{idx+1}.json"
     path.write_text(json.dumps(record, indent=2))
     return str(path)
-## Regulatory Audit Logger (`src/governance/audit_logger.py`)
+"""## Regulatory Audit Logger (`src/governance/audit_logger.py`)
 
 The `audit_logger.py` module implements WORM-compliant (Write-Once, Read-Many) immutable recordkeeping for the **EDGE-TF-disclosure-agent-engine**. It enforces cryptographic hash-chaining across all portfolio rebalances, human-in-the-loop (HITL) dual sign-offs, pre-trade compliance audits, and broker execution drop-copies to satisfy SEC Rule 204-2 and Investment Company Act Rule 31a-1 books-and-records retention requirements.
 
@@ -22,7 +22,7 @@ The `audit_logger.py` module implements WORM-compliant (Write-Once, Read-Many) i
 * **`WORM-Compliant Append-Only Storage`**: Flushes structured JSON-Lines (`.jsonl`) payloads directly to the immutable `data/decision_records/` directory.
 * **`Tamper-Evident Chain Verification`**: Includes automated integrity audit utilities to detect payload corruption, record omission, or sequence manipulation.
 * **`Granular Audit Categorization`**: Standardizes regulatory event types across pre-trade checks, model ranking snapshots, broker fills, and emergency kill-switch engagements.
-Python
+Python"""
 # src/governance/audit_logger.py
 """
 EDGE-TF Disclosure Agent Engine - Immutable Regulatory Audit Logger.

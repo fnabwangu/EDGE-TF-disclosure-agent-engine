@@ -141,7 +141,8 @@ def compute_manager_graph_pipeline(
         (results["manager_breadth"] - b_mean) / (b_std if b_std > 0 else 1.0)
     )
 
-    return results.reset_index()"""
+    return results.reset_index()
+'''
 Edge-TF Disclosure Agent Engine - Manager Graph & Independence Resolver
 Path: src/quant_engine/manager_graph.py
 
@@ -368,3 +369,4 @@ class ManagerGraphEngine:
         ).fillna(0.0)
 
         return results.reset_index()
+'''

@@ -4,7 +4,7 @@ Placeholder for options greeks and IV surfaces.
 
 def price_option():
     return {"price": 0.0}
-========================================================================================
+"""========================================================================================
 MODULE: Options Modeler & Duration Matching Engine (src/trade_design/options_modeler.py)
 PURPOSE: Structure derivative expressions (e.g., deep ITM LEAPS, vertical call spreads) 
          by aligning option maturity and Greek profiles directly with thesis horizon.
@@ -55,7 +55,6 @@ STEP 5: LIQUIDITY & IMPLEMENTATION FIT VALIDATION
 OUTPUT:
     - Structured options payload with [structure_type, expiry, long_strike, short_strike, 
       delta, net_debit, max_risk, scenario_matrix, liquidity_status][cite: 1].
-"""
 Edge-TF / Reverse Engineering Alpha Engine
 Module: src/trade_design/options_modeler.py
 Purpose: Perform duration-matched derivative structuring, Greek surface evaluation,
@@ -324,6 +323,3 @@ def generate_scenario_surface(
         )
 
     return pd.DataFrame(scenarios)
-
-
-========================================================================================

@@ -1,4 +1,4 @@
-## Execution Vehicle & Instrument Selector (`src/trade_design/vehicle_selector.py`)
+"""## Execution Vehicle & Instrument Selector (`src/trade_design/vehicle_selector.py`)
 
 The `vehicle_selector.py` module evaluates candidate portfolio actions across available implementation instruments (physical common shares, American Depositary Receipts [ADRs], single-stock options overlays, and synthetic forward equivalents). It dynamically scores liquidity profiles, bid-ask slippage drag, borrowing costs, collateral requirements, and SEC Rule 18f-4 leverage impact to select the optimal implementation vehicle for a target thesis.
 
@@ -11,7 +11,7 @@ The `vehicle_selector.py` module evaluates candidate portfolio actions across av
 * **`Slippage & Market Impact Estimator`**: Models expected execution costs using average daily volume (ADV), bid-ask spreads, and order sizes.
 * **`Automated Proposal Packaging`**: Transforms high-level target allocations into deterministic `StructuredTradeProposal` instances for the execution gateway.
                                                                                                                                      
-    # src/trade_design/vehicle_selector.py
+    # src/trade_design/vehicle_selector.py"""
 """
 EDGE-TF Disclosure Agent Engine - Execution Vehicle & Instrument Selector.
 

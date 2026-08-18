@@ -6,7 +6,7 @@ def compute_u_f_i_t(flows):
     """Return a simple normalized decomposition of flows (placeholder)."""
     total = sum(flows) or 1
     return [f / total for f in flows]
-========================================================================================
+"""========================================================================================
 MODULE: Flow Decomposition Engine (src/quant_engine/flow_decomposition.py)
 PURPOSE: Decouple passive creation/redemption mechanics from active manager conviction.
 ========================================================================================
@@ -54,7 +54,6 @@ OUTPUT:
     - enriched_holdings_panel with [u, ExpectedQ, AQD, AQD_pct, signal_flag][cite: 1]
 ========================================================================================
 
-"""
 Edge-TF / Reverse Engineering Alpha Engine
 Module: src/quant_engine/flow_decomposition.py
 Purpose: Isolate active managerial accumulation from creation/redemption noise.

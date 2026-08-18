@@ -3,7 +3,7 @@ import streamlit as st
 def render_gate_indicators():
     st.header("Gate Indicators")
     st.write("Gate statuses will appear here.")
-## Gate Indicators Component (`console/components/gate_indicators.py`)
+"""## Gate Indicators Component (`console/components/gate_indicators.py`)
 
 The `gate_indicators.py` module renders real-time qualitative status flags, statutory gating indicators, and operational pipeline health checks for the ETF console. It acts as the visual go/no-go dashboard before rebalance execution or AP disclosure generation.
 
@@ -15,7 +15,7 @@ The `gate_indicators.py` module renders real-time qualitative status flags, stat
 * **`Risk Gating Metrics`**: Evaluates SEC Rule 18f-4 relative/absolute Value-at-Risk limits and drawdown circuit-breaker thresholds.
 * **`Pipeline Operational Readiness`**: Monitors data feed sanity, broker FIX connection health, and dual-signatory approvals.
 * **`Status Signal Encoding`**: Emits discrete states (`OPEN_GREEN`, `WARNING_AMBER`, `CLOSED_RED`) with ANSI colorized console rendering.
-Python
+Python"""
 # console/components/gate_indicators.py
 """
 EDGE-TF Disclosure Agent Engine - Gate Indicators & Pipeline Health Component.

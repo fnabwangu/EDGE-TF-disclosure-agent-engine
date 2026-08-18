@@ -4,7 +4,7 @@ Strict JSON-only prompt templates placeholder.
 PROMPTS = {
     "thesis": {"role": "system", "content": "{\"task\": \"generate_thesis\"}"}
 }
-## LLM Prompt Engineering & Structured Reasoning Templates (`src/inference/meta_prompts.py`)
+"""## LLM Prompt Engineering & Structured Reasoning Templates (`src/inference/meta_prompts.py`)
 
 The `meta_prompts.py` module defines structured system prompts, deterministic JSON schemas, few-shot exemplars, and chain-of-thought scaffolds for LLM-assisted qualitative reasoning within the **EDGE-TF-disclosure-agent-engine**. It enforces strict adherence to SEC regulatory disclosures (Rule 6c-11, Rule 35d-1), qualitative falsification framing, catalyst extraction, and portfolio rebalance rationale generation.
 
@@ -16,7 +16,7 @@ The `meta_prompts.py` module defines structured system prompts, deterministic JS
 * **`Regulatory Disclosure & Commentary Synthesizer`**: Generates factual, non-promotional ETF commentary and Portfolio Composition File (PCF) disclosure notes adhering to SEC Rule 6c-11.
 * **`Adversarial Thesis Red-Teaming Prompt`**: Challenges investment proposals by generating specific downside failure modes, counter-catalysts, and risk factor mappings.
 * **`JSON Output Schemas & Parsing Guardrails`**: Formats prompt inputs with explicit typing to guarantee deterministic JSON output compatible with `pydantic` or Python dataclasses.
-Python
+Python"""
 # src/inference/meta_prompts.py
 """
 EDGE-TF Disclosure Agent Engine - Meta-Prompt Templates & Reasoning Scaffolds.

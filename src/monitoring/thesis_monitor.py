@@ -6,7 +6,7 @@ def compute_drift(score_history):
     if not score_history:
         return 0.0
     return score_history[-1] - score_history[0]
-## Qualitative Thesis Invalidation & Catalyst Tracker (`src/monitoring/thesis_monitor.py`)
+"""## Qualitative Thesis Invalidation & Catalyst Tracker (`src/monitoring/thesis_monitor.py`)
 
 The `thesis_monitor.py` module continuously monitors registered investment hypotheses against live market drawdowns, relative benchmark performance (e.g., vs. QQQ/SPY), and filing/news invalidation events. When a thesis trips an invalidation limit or catalyst deadline, the monitor automatically alerts the governance engine, flags affected holdings in the approval queue, and recommends candidate divestments.
 
@@ -19,7 +19,7 @@ The `thesis_monitor.py` module continuously monitors registered investment hypot
 * **`Monitoring Telemetry Integration`**: Streams structured hypothesis telemetry frames into `SystemHealthMonitor` and the terminal console dashboard.
 * **`Cryptographic Audit Trail Logging`**: Formats invalidation lifecycle transitions into structured records for immutable WORM logging via `AuditLogger`.
 
-# src/monitoring/thesis_monitor.py
+ # src/monitoring/thesis_monitor.py"""
 """
 EDGE-TF Disclosure Agent Engine - Qualitative Thesis & Catalyst Monitor.
 

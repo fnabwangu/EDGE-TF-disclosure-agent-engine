@@ -7,7 +7,7 @@ class BrokerInterface(ABC):
     @abstractmethod
     def place_order(self, order):
         raise NotImplementedError
-## Broker Interface & FIX Protocol Gateway (`src/execution/broker_interface.py`)
+"""## Broker Interface & FIX Protocol Gateway (`src/execution/broker_interface.py`)
 
 The `broker_interface.py` module defines the institutional execution client interface, handling FIX protocol abstractions, simulated dry-run execution engines, REST/WebSocket broker API connectors, and automated failover mechanics for the **EDGE-TF-disclosure-agent-engine**.
 
@@ -19,7 +19,7 @@ The `broker_interface.py` module defines the institutional execution client inte
 * **`SimulatedExecutionBroker`**: Built-in market simulator with configurable slippage (Almgren-Chriss/square-root market impact) and rejection modeling for paper runs and backtesting.
 * **`InteractiveBrokersGateway` & `AlpacaGateway`**: Production/paper connectors supporting algorithmic execution strategies (TWAP, VWAP) and option overlay orders.
 * **`Automated Failover Router`**: Automatically reroutes flow to secondary EMS endpoints upon repeated socket timeouts or broker-side connectivity dropouts.
-Python
+Python"""
 # src/execution/broker_interface.py
 """
 EDGE-TF Disclosure Agent Engine - Institutional Broker Interface & Execution Adapters.

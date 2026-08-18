@@ -6,7 +6,7 @@ import math
 def persistence_decay(value: float, half_life_periods: float, periods: int) -> float:
     rate = math.log(2) / half_life_periods
     return value * math.exp(-rate * periods)
-========================================================================================
+"""========================================================================================
 MODULE: Persistence & Half-Life Decay Engine (src/quant_engine/persistence.py)
 PURPOSE: Discriminate between transient single-observation anomalies and durable, 
          multi-period institutional accumulation using exponential memory decay.
@@ -57,7 +57,6 @@ OUTPUT:
     - Persistence metrics table with [P_short, P_medium, P_long, Persistence_Acceleration, persistence_status][cite: 1].
 ========================================================================================
 
-"""
 Edge-TF / Reverse Engineering Alpha Engine
 Module: src/quant_engine/persistence.py
 Purpose: Evaluate signal durability and exponential decay over multi-horizon windows.

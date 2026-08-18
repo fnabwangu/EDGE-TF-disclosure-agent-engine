@@ -3,7 +3,7 @@ import streamlit as st
 def render_approval_queue():
     st.header("Approval Queue")
     st.write("No approvals in scaffold.")
-## Approval Queue Component (`console/components/approval_queue.py`)
+"""## Approval Queue Component (`console/components/approval_queue.py`)
 
 The `approval_queue.py` module implements human-in-the-loop oversight and dual-authorization workflows for model rebalances, portfolio composition disclosures, and critical override events.
 
@@ -15,7 +15,7 @@ The `approval_queue.py` module implements human-in-the-loop oversight and dual-a
 * **`Risk & Disclosure Context Injection`**: Binds rebalance orders, pre-trade compliance audits, and daily PCF payloads directly to the pending approval ticket.
 * **`Console Telemetry & Terminal UI`**: Formats pending approval tickets into scannable console views with visual inspection tables.
 * **`Immutable Audit Trail`**: Records sign-off timestamps, signor credentials, decision statuses (`PENDING`, `APPROVED`, `REJECTED`), and justification notes.
-Python
+Python"""
 # console/components/approval_queue.py
 """
 EDGE-TF Disclosure Agent Engine - Human-in-the-Loop Approval Queue.

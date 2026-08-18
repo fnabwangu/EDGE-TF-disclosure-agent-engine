@@ -3,7 +3,7 @@ import streamlit as st
 def render_signal_feed():
     st.header("Signal Feed")
     st.write("No live signals in scaffold — connect ingestion pipeline to see messages.")
-## Signal Feed & Real-Time Alpha Telemetry (`console/components/signal_feed.py`)
+"""## Signal Feed & Real-Time Alpha Telemetry (`console/components/signal_feed.py`)
 
 The `signal_feed.py` module handles real-time quantitative signal streaming, multi-factor Z-score telemetry, ranking shifts, and overlay trigger feeds for the interactive ETF terminal console.
 
@@ -15,7 +15,7 @@ The `signal_feed.py` module handles real-time quantitative signal streaming, mul
 * **`Factor Attribution & Decomposition`**: Displays individual Z-score contributions to each constituent's aggregate alpha rank.
 * **`Overlay Trigger Alerts`**: Highlights derivative overlay states (e.g., covered call target delta, active hedge coverage, roll triggers).
 * **`Rank Shift Analytics`**: Tracks top positive and negative momentum gainers within the fund universe across rebalance cycles.
-Python
+Python"""
 # console/components/signal_feed.py
 """
 EDGE-TF Disclosure Agent Engine - Signal Feed & Alpha Telemetry Component.

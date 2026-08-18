@@ -5,7 +5,7 @@ Generates primary thesis & alternatives (placeholder).
 def generate_theses(seed: str):
     return [f"Primary thesis for {seed}", f"Alternative thesis for {seed}"]
 Markdown
-## Qualitative Hypothesis & Thematic Discovery Agent (`src/inference/hypothesis_agent.py`)
+"""## Qualitative Hypothesis & Thematic Discovery Agent (`src/inference/hypothesis_agent.py`)
 
 The `hypothesis_agent.py` module formalizes investment hypotheses, catalyst tracking, and thematic thesis validation for candidate universe selection. It bridges unstructured fundamental developments (earnings transcripts, macro policy shifts, technological inflections) with quantitative factor filters, generating machine-readable hypothesis payloads with clear, falsifiable conditions.
 
@@ -17,7 +17,7 @@ The `hypothesis_agent.py` module formalizes investment hypotheses, catalyst trac
 * **`Catalyst Tracking & Invalidation Engine`**: Continuously monitors incoming fundamental and price signals against registered nullification bounds.
 * **`Cross-Walk to Factor Universe`**: Maps validated thematic hypotheses to an actionable ticker screening list for downstream alpha scoring in `FactorPipeline`.
 * **`Audit Record Formatting`**: Encapsulates qualitative reasoning into deterministic hashable dictionaries for immutable audit logging.
-Python
+Python"""
 # src/inference/hypothesis_agent.py
 """
 EDGE-TF Disclosure Agent Engine - Qualitative Hypothesis & Thematic Discovery Agent.

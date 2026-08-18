@@ -1,4 +1,4 @@
-## Statutory & Domain Ontology Interface (`src/ontology/__init__.py`)
+"""## Statutory & Domain Ontology Interface (`src/ontology/__init__.py`)
 
 The `src/ontology/__init__.py` module formalizes the domain semantic ontology, classification hierarchies, and statutory rule definitions underpinning the **EDGE-TF-disclosure-agent-engine**. It maps statutory obligations (1940 Act, IRC Subchapter M, SEC disclosure mandates) and portfolio taxonomies into strongly-typed Python enumerations and data models.
 
@@ -9,7 +9,7 @@ The `src/ontology/__init__.py` module formalizes the domain semantic ontology, c
 * **`RegulatoryFramework`**: Formal statutory authorities (`SEC_1940_ACT`, `IRC_SUBCHAPTER_M`, `SEC_RULE_6C11`, `SEC_RULE_18F4`, `SEC_RULE_22E4`, `SEC_RULE_35D1`).
 * **`AssetClassification`**: Multi-tiered taxonomy categorizing spot equities, options overlays, cash equivalents, and illiquid instruments.
 * **`ThematicMandateCluster`**: Semantic buckets enforcing portfolio concentration limits and 80% Names Rule alignment.
-* **`FiduciaryRole`**: Designated signatory roles required for dual-authorization gates and cryptographic WORM audit trails (`CCO`, `LEAD_PM`, `CFO`, `RISK_OFFICER`).# ontology package
+* **`FiduciaryRole`**: Designated signatory roles required for dual-authorization gates and cryptographic WORM audit trails (`CCO`, `LEAD_PM`, `CFO`, `RISK_OFFICER`).# ontology package"""
 
 # src/ontology/__init__.py
 """

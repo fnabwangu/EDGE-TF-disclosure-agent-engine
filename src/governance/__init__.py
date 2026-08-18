@@ -1,4 +1,4 @@
-Governance Engine Interface (src/governance/__init__.py)
+"""Governance Engine Interface (src/governance/__init__.py)
 The src/governance/__init__.py module acts as the core interface for regulatory policy enforcement, emergency kill switches, dual-authorization audit gates, and statutory compliance frameworks within the EDGE-TF-disclosure-agent-engine.
 
 Exported Components
@@ -10,7 +10,7 @@ DualAuthorizationGate: Coordinates cryptographic sign-offs from designated fiduc
 
 GovernanceState: Represents current system lockdown status, override permissions, and audit tracking metadata.
 
-Python
+Python"""
 # src/governance/__init__.py
 """
 EDGE-TF Disclosure Agent Engine - Governance & Compliance Policy Module.

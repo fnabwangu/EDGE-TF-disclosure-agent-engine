@@ -1,7 +1,7 @@
 def check_user(username: str) -> bool:
     # placeholder auth check
     return username == "admin"
-## Authentication & Role-Based Access Control (`console/utils/auth.py`)
+"""## Authentication & Role-Based Access Control (`console/utils/auth.py`)
 
 The `auth.py` module handles console session validation, role-based authorization (RBAC), and cryptographic credential verification for high-privilege operational tasks—including rebalance order release, portfolio disclosure transmission, and emergency kill-switch resets.
 
@@ -13,7 +13,7 @@ The `auth.py` module handles console session validation, role-based authorizatio
 * **`Password / Token Hashing`**: Implements salted SHA-256 hashing for local credential authentication.
 * **`Session Token Lifecycle`**: Issues expiring time-bound authorization tokens for terminal operators.
 * **`Permission Verification Decorators`**: Provides decorators and verification guards to protect critical execution routines.
-Python
+Python"""
 # console/utils/auth.py
 """
 EDGE-TF Disclosure Agent Engine - Console Authentication & RBAC Module.
