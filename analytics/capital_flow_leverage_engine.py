@@ -14,16 +14,26 @@ that band as evidence accumulates toward the next state, rather than jumping
 straight to the band ceiling the moment a state is entered. Risk caps are
 supplied as already-computed ceilings and always override the requested
 leverage -- capital flow determines what is requested, risk determines what
-is approved.
+is approved. ``requested_leverage_cap`` is a separate, policy-level ceiling on
+the *requested* number itself (config/capital_flow_leverage.json), distinct
+from the risk-cap ceilings that produce the *approved* number.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from analytics.leverage_tranches import EvidenceState
 from analytics.staged_leverage_gate import StagedLeverageDecision, StagedLeverageInputs
+from core.schemas import LeverageLimits
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_CONFIG_PATH = Path("config/capital_flow_leverage.json")
 
 
 @dataclass(frozen=True)
@@ -52,6 +62,9 @@ class DeploymentPolicy:
     confirmed: LeverageBand = LeverageBand(6.0, 8.0)
     strong: LeverageBand = LeverageBand(8.0, 10.0)
 
+    # Policy-level ceiling on the *requested* number, separate from risk caps.
+    requested_leverage_cap: Optional[float] = None
+
     def band_for(self, state: EvidenceState) -> LeverageBand:
         return {
             EvidenceState.WAIT: self.wait,
@@ -60,6 +73,25 @@ class DeploymentPolicy:
             EvidenceState.CONFIRMED: self.confirmed,
             EvidenceState.STRONG: self.strong,
         }[state]
+
+    @staticmethod
+    def from_config(config: Mapping[str, Any]) -> "DeploymentPolicy":
+        bands_cfg: Mapping[str, Any] = config.get("bands", {})
+
+        def band(name: str, fallback: LeverageBand) -> LeverageBand:
+            raw = bands_cfg.get(name)
+            return LeverageBand(float(raw[0]), float(raw[1])) if raw else fallback
+
+        defaults = DeploymentPolicy()
+        return DeploymentPolicy(
+            minimum_event_probability=float(config.get("minimum_event_probability", defaults.minimum_event_probability)),
+            wait=band("WAIT", defaults.wait),
+            seeded=band("SEEDED", defaults.seeded),
+            emerging=band("EMERGING", defaults.emerging),
+            confirmed=band("CONFIRMED", defaults.confirmed),
+            strong=band("STRONG", defaults.strong),
+            requested_leverage_cap=config.get("requested_leverage_cap"),
+        )
 
 
 @dataclass(frozen=True)
@@ -97,10 +129,30 @@ class DeploymentDecision:
 
 
 class CapitalFlowLeverageEngine:
-    """Computes requested leverage from capital-flow maturity, then risk-caps it."""
+    """Computes requested leverage from capital-flow maturity, then risk-caps it.
 
-    def __init__(self, policy: Optional[DeploymentPolicy] = None):
-        self.policy = policy or DeploymentPolicy()
+    When ``policy`` is not supplied explicitly, bands/thresholds are loaded
+    from ``config/capital_flow_leverage.json`` (falling back to built-in
+    defaults if the file is absent), and ``default_risk_limits`` is exposed
+    as a convenience ``LeverageLimits`` built from that file's ``risk_limits``
+    section for callers that don't compute their own.
+    """
+
+    def __init__(self, policy: Optional[DeploymentPolicy] = None, config_path: Optional[Path] = None):
+        config = self._load_config(config_path)
+        self.policy = policy or DeploymentPolicy.from_config(config)
+        risk_limits = config.get("risk_limits")
+        self.default_risk_limits: Optional[LeverageLimits] = LeverageLimits(**risk_limits) if risk_limits else None
+
+    @staticmethod
+    def _load_config(config_path: Optional[Path]) -> Dict[str, Any]:
+        path = config_path or DEFAULT_CONFIG_PATH
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return json.load(handle)
+        except Exception as exc:
+            logger.warning("Falling back to built-in capital-flow defaults: failed to load %s: %s", path, exc)
+            return {}
 
     def calculate(self, inp: DeploymentInputs) -> DeploymentDecision:
         if not 0.0 <= inp.event_probability <= 1.0:
@@ -126,6 +178,11 @@ class CapitalFlowLeverageEngine:
         band = self.policy.band_for(inp.flow_state)
         requested = band.floor + inp.flow_progress * (band.ceiling - band.floor)
 
+        reason_codes = ["EVENT_THESIS_VALID", f"FLOW_{inp.flow_state.value}", "CAPITAL_FLOW_DEPLOYMENT"]
+        if self.policy.requested_leverage_cap is not None and requested > self.policy.requested_leverage_cap:
+            requested = self.policy.requested_leverage_cap
+            reason_codes.append("REQUESTED_LEVERAGE_CAP_APPLIED")
+
         # Risk caps override the signal, always
         caps: Dict[str, float] = {
             "ABSOLUTE": inp.absolute_leverage_cap,
@@ -145,11 +202,7 @@ class CapitalFlowLeverageEngine:
             state_ceiling=band.ceiling,
             limiting_constraint=limiting_constraint,
             permitted=approved > 0.0,
-            reason_codes=(
-                "EVENT_THESIS_VALID",
-                f"FLOW_{inp.flow_state.value}",
-                "CAPITAL_FLOW_DEPLOYMENT",
-            ),
+            reason_codes=tuple(reason_codes),
         )
 
     @staticmethod
@@ -168,15 +221,12 @@ class CapitalFlowLeverageEngine:
 class CapitalFlowSignalGate:
     """Adapts CapitalFlowLeverageEngine to the SignalLeverageGate interface.
 
-    This is what lets DynamicExposureController opt into the aggressive
-    band-based (up to 10x) capital-flow curve instead of the conservative
-    flat StagedLeverageGate/LeveragePolicy default. It is never the default
-    signal gate -- callers must explicitly construct one, matching the rule
-    that a high-leverage profile is a separate, opt-in policy.
-
-    Risk caps are intentionally left uncapped here (float("inf")): the real
-    risk-cap stage is DynamicExposureController's own LeverageEngine step,
-    applied independently after this gate returns its requested leverage.
+    This is the signal source DynamicExposureController uses by default: the
+    banded, config-driven capital-flow curve (up to the STRONG-band ceiling)
+    rather than the legacy flat StagedLeverageGate/LeveragePolicy. Risk caps
+    are intentionally left uncapped here (float("inf")): the real risk-cap
+    stage is DynamicExposureController's own LeverageEngine step, applied
+    independently after this gate returns its requested leverage.
     """
 
     def __init__(self, engine: Optional[CapitalFlowLeverageEngine] = None):

@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 VERSION = {"type": "string", "pattern": r"^\d+\.\d+\.\d+$"}
 RATIO = {"type": "number", "minimum": 0.0, "maximum": 1.0}
 POSITIVE = {"type": "number", "exclusiveMinimum": 0.0}
+POSITIVE_OR_ZERO = {"type": "number", "minimum": 0.0}
 STRING = {"type": "string", "minLength": 1}
 
 
@@ -55,6 +56,22 @@ CONFIG_SCHEMAS = {
             "quality_thresholds": object_schema(["weak_max", "emerging_max", "confirmed_max"], {"weak_max": RATIO, "emerging_max": RATIO, "confirmed_max": RATIO}),
             "leverage_bounds": object_schema(["min_leverage", "max_leverage"], {"min_leverage": POSITIVE, "max_leverage": POSITIVE}),
             "default_leverage_limits": object_schema(
+                ["max_absolute_leverage", "max_trade_loss_pct", "volatility_limit", "liquidity_limit", "concentration_limit", "portfolio_limit"],
+                {key: POSITIVE for key in ["max_absolute_leverage", "max_trade_loss_pct", "volatility_limit", "liquidity_limit", "concentration_limit", "portfolio_limit"]},
+            ),
+        },
+    ),
+    "capital_flow_leverage.json": object_schema(
+        ["version", "minimum_event_probability", "bands", "requested_leverage_cap", "risk_limits"],
+        {
+            "version": VERSION,
+            "minimum_event_probability": RATIO,
+            "bands": object_schema(
+                ["WAIT", "SEEDED", "EMERGING", "CONFIRMED", "STRONG"],
+                {key: {"type": "array", "minItems": 2, "maxItems": 2, "items": POSITIVE_OR_ZERO} for key in ["WAIT", "SEEDED", "EMERGING", "CONFIRMED", "STRONG"]},
+            ),
+            "requested_leverage_cap": POSITIVE,
+            "risk_limits": object_schema(
                 ["max_absolute_leverage", "max_trade_loss_pct", "volatility_limit", "liquidity_limit", "concentration_limit", "portfolio_limit"],
                 {key: POSITIVE for key in ["max_absolute_leverage", "max_trade_loss_pct", "volatility_limit", "liquidity_limit", "concentration_limit", "portfolio_limit"]},
             ),

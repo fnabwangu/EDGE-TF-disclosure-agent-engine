@@ -40,7 +40,7 @@ def _sleeve_inputs(**overrides) -> SleeveEvaluationInputs:
         worst_case_loss_pct=-0.20,
         strategy_volatility=0.05,
         maximum_executable_notional=10_000_000.0,
-        current_return=0.0,
+        underlying_return=0.0,
         generic_projected_return=0.22,
     )
     defaults.update(overrides)

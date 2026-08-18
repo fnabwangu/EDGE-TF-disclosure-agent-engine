@@ -191,7 +191,7 @@ def _base_update_kwargs(**overrides):
         strategy_volatility=0.05,
         base_strategy_notional=100_000.0,
         maximum_executable_notional=10_000_000.0,
-        current_return=0.0,
+        underlying_return=0.0,
         generic_projected_return=0.22,
     )
     kwargs.update(overrides)
@@ -230,7 +230,7 @@ def test_dynamic_controller_scales_out_riskiest_tranche_first_on_degradation():
         **_base_update_kwargs(
             current_time=T0 + timedelta(days=60),
             evidence_state=EvidenceState.STRONG,
-            current_return=0.45,
+            underlying_return=0.45,
             generic_projected_return=0.60,  # modest benchmark capture -> default 25% trim
         )
     )

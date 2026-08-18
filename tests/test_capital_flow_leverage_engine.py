@@ -148,3 +148,35 @@ def test_invalid_flow_progress_raises():
     engine = CapitalFlowLeverageEngine()
     with pytest.raises(ValueError):
         engine.calculate(_inputs(flow_progress=-0.1))
+
+
+def test_requested_leverage_cap_overrides_band_ceiling():
+    policy = DeploymentPolicy(strong=LeverageBand(8.0, 10.0), requested_leverage_cap=6.0)
+    engine = CapitalFlowLeverageEngine(policy)
+    decision = engine.calculate(_inputs(flow_state=EvidenceState.STRONG, flow_progress=1.0))
+    assert decision.requested_leverage == pytest.approx(6.0)
+    assert "REQUESTED_LEVERAGE_CAP_APPLIED" in decision.reason_codes
+
+
+def test_engine_loads_policy_and_default_risk_limits_from_config():
+    engine = CapitalFlowLeverageEngine()
+    assert engine.policy.minimum_event_probability == pytest.approx(0.70)
+    assert engine.policy.emerging.floor == pytest.approx(4.0)
+    assert engine.policy.emerging.ceiling == pytest.approx(6.0)
+    assert engine.policy.requested_leverage_cap == pytest.approx(10.0)
+    assert engine.default_risk_limits is not None
+    assert engine.default_risk_limits.max_absolute_leverage == pytest.approx(10.0)
+    assert engine.default_risk_limits.max_trade_loss_pct == pytest.approx(0.075)
+
+
+def test_engine_falls_back_to_builtin_defaults_without_config_file(tmp_path):
+    missing_path = tmp_path / "does_not_exist.json"
+    engine = CapitalFlowLeverageEngine(config_path=missing_path)
+    assert engine.policy.strong.ceiling == pytest.approx(10.0)
+    assert engine.default_risk_limits is None
+
+
+def test_explicit_policy_bypasses_config_loading():
+    policy = DeploymentPolicy(emerging=LeverageBand(1.0, 2.0))
+    engine = CapitalFlowLeverageEngine(policy)
+    assert engine.policy is policy

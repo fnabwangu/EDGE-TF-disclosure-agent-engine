@@ -9,13 +9,18 @@ update:
     TargetExposure_t = min(SignalExposure_t, RiskExposure_t, ProfitProtectedExposure_t)
 
 Evidence-state improvements only ever open the door to more leverage
-(SignalExposure, via a SignalLeverageGate -- StagedLeverageGate's flat,
-conservative policy by default, or an opt-in alternative such as
-CapitalFlowSignalGate for an aggressive banded policy). Risk caps
+(SignalExposure, via a SignalLeverageGate -- CapitalFlowSignalGate's banded,
+config-driven capital-flow curve by default, or the legacy flat
+StagedLeverageGate/LeveragePolicy if explicitly supplied). Risk caps
 (LeverageEngine) and profit-taking (ProfitTakingEngine +
 ExposureReductionEngine) can always cut exposure below that door regardless
 of conviction. New tranches are only opened for the incremental leverage
 newly unlocked; exits unwind the highest-risk tranches first.
+
+Profit-taking operates on the *leveraged* return (underlying_return *
+current_leverage), not the sleeve's raw unlevered price return -- an 8%
+underlying move at 6x exposure is a 48% move on the capital actually at risk,
+and must be evaluated as such by the harvest ladder.
 """
 
 from __future__ import annotations
@@ -25,10 +30,11 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
 
+from analytics.capital_flow_leverage_engine import CapitalFlowSignalGate
 from analytics.leverage_engine import LeverageDecision, LeverageEngine
 from analytics.leverage_tranches import EvidenceState, LeverageTranche, TrancheBook
 from analytics.profit_taking_engine import ProfitTakingEngine
-from analytics.staged_leverage_gate import SignalLeverageGate, StagedLeverageGate, StagedLeverageInputs
+from analytics.staged_leverage_gate import SignalLeverageGate, StagedLeverageInputs
 from core.schemas import LeverageLimits, ProfitTakingInputs, ProfitTakingResult
 from risk.exposure_reduction_engine import ExposureReductionEngine, ExposureReductionResult
 
@@ -41,6 +47,8 @@ class DynamicExposureResult:
     signal_target_leverage: float
     risk_capped_leverage: float
     tranche_added: float
+    underlying_return: float
+    leveraged_return: float
     profit_decision: ProfitTakingResult
     reduction_result: ExposureReductionResult
     leverage_after: float
@@ -57,7 +65,7 @@ class DynamicExposureController:
         profit_engine: Optional[ProfitTakingEngine] = None,
         book: Optional[TrancheBook] = None,
     ):
-        self.staged_gate: SignalLeverageGate = staged_gate or StagedLeverageGate()
+        self.staged_gate: SignalLeverageGate = staged_gate or CapitalFlowSignalGate()
         self.leverage_engine = leverage_engine or LeverageEngine()
         self.profit_engine = profit_engine or ProfitTakingEngine()
         self.book = book or TrancheBook()
@@ -80,7 +88,7 @@ class DynamicExposureController:
         strategy_volatility: float,
         base_strategy_notional: float,
         maximum_executable_notional: float,
-        current_return: float,
+        underlying_return: float,
         generic_projected_return: float,
         event_probability: float = 1.0,
         flow_progress: float = 0.0,
@@ -133,9 +141,12 @@ class DynamicExposureController:
             reason_codes.append("TRANCHE_ADDED")
 
         # 4. ProfitProtectedExposure: harvesting/exit can only ever reduce exposure.
+        # Profit-taking sees the LEVERAGED return on capital at risk, not the
+        # sleeve's raw underlying price return.
+        leveraged_return = underlying_return * self.book.current_leverage
         profit_decision = self.profit_engine.evaluate(
             ProfitTakingInputs(
-                current_return=current_return,
+                current_return=leveraged_return,
                 generic_projected_return=generic_projected_return,
                 remaining_ev=remaining_ev,
                 minimum_remaining_ev=minimum_remaining_ev,
@@ -144,7 +155,7 @@ class DynamicExposureController:
                 invalidation_intact=invalidation_intact,
                 leverage=max(self.book.current_leverage, 1e-9),
                 original_capital=base_strategy_notional,
-                current_position_value=base_strategy_notional * (1.0 + current_return),
+                current_position_value=base_strategy_notional * (1.0 + leveraged_return),
             )
         )
         reduction_result = ExposureReductionEngine.apply(self.book, profit_decision, current_time, current_price)
@@ -155,6 +166,8 @@ class DynamicExposureController:
             signal_target_leverage=staged_decision.signal_target_leverage,
             risk_capped_leverage=risk_capped_leverage,
             tranche_added=tranche_added,
+            underlying_return=underlying_return,
+            leveraged_return=leveraged_return,
             profit_decision=profit_decision,
             reduction_result=reduction_result,
             leverage_after=self.book.current_leverage,

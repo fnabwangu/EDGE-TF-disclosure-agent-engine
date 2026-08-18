@@ -109,7 +109,7 @@ class SleeveEvaluationInputs:
     worst_case_loss_pct: float
     strategy_volatility: float
     maximum_executable_notional: float
-    current_return: float
+    underlying_return: float
     generic_projected_return: float
     data_available: bool = True
     event_probability: float = 1.0
@@ -131,10 +131,10 @@ class MultiSleevePortfolioEngine:
 
         Gross_t = sum(|Exposure_s,t|) / NAV_t  <=  GrossMax
 
-    By default every sleeve uses the conservative flat StagedLeverageGate.
-    Pass ``signal_gates`` to opt individual sleeves into an alternative
-    SignalLeverageGate (e.g. CapitalFlowSignalGate for an aggressive banded
-    policy) -- a high-leverage profile is always opt-in, never the default.
+    By default every sleeve uses CapitalFlowSignalGate's banded, config-driven
+    capital-flow policy. Pass ``signal_gates`` to opt individual sleeves into
+    an alternative SignalLeverageGate (e.g. the legacy flat StagedLeverageGate)
+    instead.
     """
 
     def __init__(
@@ -209,7 +209,7 @@ class MultiSleevePortfolioEngine:
                 strategy_volatility=inputs.strategy_volatility,
                 base_strategy_notional=base_notional,
                 maximum_executable_notional=inputs.maximum_executable_notional,
-                current_return=inputs.current_return,
+                underlying_return=inputs.underlying_return,
                 generic_projected_return=inputs.generic_projected_return,
                 event_probability=inputs.event_probability,
                 flow_progress=inputs.flow_progress,
@@ -218,7 +218,10 @@ class MultiSleevePortfolioEngine:
             reason_codes.extend(result.reason_codes)
 
             approved_leverage = result.leverage_after
-            current_value = base_notional * (1.0 + inputs.current_return)
+            # Value/PnL is computed on the LEVERAGED return, not the sleeve's
+            # raw unlevered price return, so profit-taking sees the real move
+            # on capital at risk (e.g. 8% underlying at 6x = 48% leveraged).
+            current_value = base_notional * (1.0 + result.leveraged_return)
             sleeve_states[sleeve] = SleeveState(
                 sleeve=sleeve,
                 target_weight=target_weight,
