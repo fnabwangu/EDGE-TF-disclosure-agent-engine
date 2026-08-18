@@ -12,6 +12,7 @@ Pydantic and dataclass models defining canonical data contracts for:
 
 from datetime import datetime, timezone
 from enum import Enum
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field
@@ -71,10 +72,111 @@ class DisclosurePayload(BaseModel):
         return datetime.fromtimestamp(self.filing_timestamp, timezone.utc).isoformat()
 
 
+class ETFHoldingObservation(BaseModel):
+    """One point-in-time ETF holding disclosure."""
+    etf_ticker: str
+    fund_id: str
+    security_id: str
+    raw_identifier: str
+    shares_held: float
+    portfolio_weight: Optional[float] = None
+    portfolio_effective_date: date
+    information_available_time: datetime
+    source: str
+    source_uri: Optional[str] = None
+
+
+class ETFSharesOutstanding(BaseModel):
+    """ETF share denominator required for q/N normalization."""
+    etf_ticker: str
+    fund_id: str
+    shares_outstanding: float = Field(gt=0)
+    effective_date: date
+    information_available_time: datetime
+    source: str
+    source_uri: Optional[str] = None
+
+
+class BasketPosition(BaseModel):
+    security_id: str
+    raw_identifier: str
+    shares: float
+
+
+class CreationRedemptionBasket(BaseModel):
+    """Creation or redemption basket disclosed by an ETF provider."""
+    etf_ticker: str
+    fund_id: str
+    side: Literal["CREATION", "REDEMPTION"]
+    creation_unit_size: int = Field(gt=0)
+    basket_date: date
+    information_available_time: datetime
+    positions: List[BasketPosition] = Field(min_length=1)
+    cash_component: Optional[float] = None
+    source: str
+    source_uri: Optional[str] = None
+
+
+class ManagerRelationship(BaseModel):
+    """Manager/adviser lineage needed for independent breadth calculations."""
+    fund_id: str
+    manager_id: str
+    adviser: str
+    subadviser: Optional[str] = None
+    portfolio_team: Optional[str] = None
+    effective_date: date
+    information_available_time: datetime
+    source: str
+    source_uri: Optional[str] = None
+
+
+class ETFRebalanceEvent(BaseModel):
+    """Methodology or scheduled rebalance event."""
+    etf_ticker: str
+    fund_id: str
+    event_type: Literal["METHODOLOGY", "REBALANCE", "RECONSTITUTION"]
+    effective_date: date
+    information_available_time: datetime
+    details: Dict[str, Any] = Field(default_factory=dict)
+    source: str
+    source_uri: Optional[str] = None
+
+
+class CorporateActionObservation(BaseModel):
+    """Corporate action required to preserve security/share lineage."""
+    security_id: str
+    action_type: Literal["SPLIT", "MERGER", "SPINOFF", "RENAME", "CUSIP_CHANGE"]
+    effective_date: date
+    information_available_time: datetime
+    ratio: Optional[float] = None
+    successor_security_id: Optional[str] = None
+    source: str
+    source_uri: Optional[str] = None
+
+
+class ETFDisclosureBundle(BaseModel):
+    """Complete canonical ETF disclosure snapshot for downstream analytics."""
+    holdings: List[ETFHoldingObservation] = Field(min_length=1)
+    shares_outstanding: List[ETFSharesOutstanding] = Field(default_factory=list)
+    baskets: List[CreationRedemptionBasket] = Field(default_factory=list)
+    manager_relationships: List[ManagerRelationship] = Field(default_factory=list)
+    rebalance_events: List[ETFRebalanceEvent] = Field(default_factory=list)
+    corporate_actions: List[CorporateActionObservation] = Field(default_factory=list)
+    ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 __all__ = [
     "DataSourceType",
     "MarketDataSnapshot",
     "IngestionBatchReport",
     "DisclosurePayload",
     "ManagerAction",
+    "ETFHoldingObservation",
+    "ETFSharesOutstanding",
+    "BasketPosition",
+    "CreationRedemptionBasket",
+    "ManagerRelationship",
+    "ETFRebalanceEvent",
+    "CorporateActionObservation",
+    "ETFDisclosureBundle",
 ]

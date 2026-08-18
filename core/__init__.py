@@ -18,6 +18,7 @@ from .disclosure_crawler import (
     FilingType,
 )
 from .config_validation import load_config, validate_config_directory
+from .etf_disclosures import ETFDisclosureIngestor, ETFDisclosureProvider, StaticETFDisclosureProvider
 
 __all__ = [
     "DataSourceType",
@@ -30,4 +31,7 @@ __all__ = [
     "FilingType",
     "load_config",
     "validate_config_directory",
+    "ETFDisclosureIngestor",
+    "ETFDisclosureProvider",
+    "StaticETFDisclosureProvider",
 ]
