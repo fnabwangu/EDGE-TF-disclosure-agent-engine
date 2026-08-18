@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import logging
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -61,6 +62,8 @@ class RiskGovernor:
         self.audit_logger = audit_logger or AuditLogger()
         self.kill_switch = kill_switch or EmergencyKillSwitchEngine()
         self.config = self._load_risk_parameters(config_path)
+        self.config_valid = bool(self.config.get("_config_valid", False))
+        self.config_error = self.config.get("_config_error")
 
         self.gate_engine = DeterministicExecutionGate(
             subchapter_m_single_cap=self.config.get("subchapter_m_single_issuer_cap", 0.25),
@@ -72,7 +75,7 @@ class RiskGovernor:
         )
 
     def _load_risk_parameters(self, config_path: Optional[Path]) -> Dict[str, Any]:
-        """Loads risk threshold configurations from disk or initializes defaults."""
+        """Load policy configuration; malformed policy is a hard no-trade state."""
         default_config = {
             "subchapter_m_single_issuer_cap": 0.25,
             "subchapter_m_aggregate_cap": 0.50,
@@ -85,15 +88,21 @@ class RiskGovernor:
         }
 
         path = config_path or Path("config/risk_parameters.json")
-        if path.exists():
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                    default_config.update(loaded)
-                    logging.info(f"Loaded risk governance parameters from {path}")
-            except Exception as exc:
-                logging.error(f"Failed to load risk config from {path}: {exc}. Using defaults.")
-        return default_config
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if not isinstance(loaded, dict):
+                raise ValueError("configuration root must be an object")
+            default_config.update(loaded)
+            default_config["_config_valid"] = True
+            logging.info(f"Loaded risk governance parameters from {path}")
+            return default_config
+        except Exception as exc:
+            error = f"CONFIG_INVALID: failed to load risk config from {path}: {exc}"
+            logging.critical(error)
+            default_config["_config_valid"] = False
+            default_config["_config_error"] = error
+            return default_config
 
     def evaluate_pre_trade_compliance(
         self,
@@ -110,6 +119,31 @@ class RiskGovernor:
         """
         now_utc = datetime.now(timezone.utc).isoformat()
         violations: List[str] = []
+
+        if not self.config_valid:
+            violation = self.config_error or "CONFIG_INVALID: risk policy is unavailable"
+            self.kill_switch.trip(TripTriggerType.STATUTORY_BREACH, violation)
+            gate_report = GateAuditReport(
+                passed_all_gates=False,
+                total_violations=1,
+                evaluations=[],
+            )
+            violations.append(violation)
+            audit_record = self.audit_logger.log_event(
+                event_type=AuditEventType.PRE_TRADE_COMPLIANCE,
+                operator_id=operator_id,
+                role=role,
+                payload={"passed": False, "system_state": "NO_TRADE_PERMISSIBLE", "violations": violations},
+            )
+            return PreTradeAuditSummary(
+                passed=False,
+                timestamp_utc=now_utc,
+                target_weights=target_weights,
+                gate_report=gate_report,
+                kill_switch_state=self.kill_switch.state,
+                violations=violations,
+                audit_record_id=audit_record.record_id,
+            )
 
         # 1. Evaluate circuit breaker and active lockdown status
         if self.kill_switch.is_locked:

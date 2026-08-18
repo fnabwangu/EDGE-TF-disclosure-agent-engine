@@ -206,16 +206,20 @@ class DisclosureNormalizer:
         """
         norm_df = df.copy()
         
-        # Handle cases where ETF shares outstanding is missing or zero
-        if etf_shares_col not in norm_df.columns or norm_df[etf_shares_col].isnull().all():
-            logger.warning("etf_shares_outstanding missing; defaulting u_normalized to raw shares (un-normalized).")
-            norm_df[output_col] = norm_df[shares_held_col]
-            return norm_df
+        # Normalized units are undefined without a valid ETF share denominator.
+        if etf_shares_col not in norm_df.columns:
+            raise ValueError(
+                f"NORMALIZATION_BLOCKED: required denominator '{etf_shares_col}' is missing."
+            )
+        if norm_df[etf_shares_col].isnull().any() or (norm_df[etf_shares_col] <= 0).any():
+            raise ValueError(
+                f"NORMALIZATION_BLOCKED: '{etf_shares_col}' must be present and positive for every row."
+            )
 
         norm_df[output_col] = np.where(
             norm_df[etf_shares_col] > 0,
             norm_df[shares_held_col] / norm_df[etf_shares_col],
-            0.0
+            np.nan
         )
         return norm_df
 
