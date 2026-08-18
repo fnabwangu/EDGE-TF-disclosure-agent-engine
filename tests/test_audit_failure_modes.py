@@ -73,6 +73,8 @@ def test_infeasible_optimizer_blocks_complete_pipeline():
 
     assert result["execution_permitted"] is False
     assert result["gate_reason"].startswith("NO_TRADE")
+    assert result["optimizer_status"] in {"INFEASIBLE", "SOLVER_UNAVAILABLE", "SOLVER_ERROR"}
+    assert result["optimizer_reason_code"].startswith("OPTIMIZATION_")
     assert np.all(result["optimized_weights"] == 0.0)
 
 

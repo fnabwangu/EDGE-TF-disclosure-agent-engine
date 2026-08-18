@@ -44,6 +44,15 @@ class OptimizationResult:
     turnover_pct: float
 
 
+@dataclass(frozen=True)
+class AllocationResult:
+    """Execution-facing result for risk-constrained position sizing."""
+    status: str
+    weights: np.ndarray
+    trade_permitted: bool
+    reason_code: str
+
+
 class ConvexPositionOptimizer:
     """
     Executes quadratic convex optimization to synthesize multi-asset trade structures
@@ -62,28 +71,30 @@ class ConvexPositionOptimizer:
         self.params = params or OptimizerParameters()
 
     @staticmethod
-    def optimize_allocation(
+    def optimize_allocation_result(
         expected_returns: np.ndarray,
         covariance_matrix: np.ndarray,
         max_drawdown_limit: float = 0.05,
         max_single_position: float = 0.10,
         risk_aversion: float = 0.5,
-    ) -> np.ndarray:
+    ) -> AllocationResult:
         """Solve a long-only risk-constrained allocation problem.
 
         ``max_drawdown_limit`` is represented by a hard annualized variance
         budget because drawdown itself is path-dependent and not convex.
-        Infeasible or solver-failed problems return an all-zero allocation.
+        Infeasible or solver-failed problems return an explicit non-permitted
+        result with a zero allocation.
         """
-        if cp is None:
-            raise RuntimeError("CVXPY is required for deterministic portfolio optimization.")
         returns = np.asarray(expected_returns, dtype=float).reshape(-1)
+        zero_weights = np.zeros(returns.size, dtype=float)
+        if cp is None:
+            return AllocationResult("SOLVER_UNAVAILABLE", zero_weights, False, "OPTIMIZATION_SOLVER_UNAVAILABLE")
         covariance = np.asarray(covariance_matrix, dtype=float)
         if returns.size == 0 or covariance.shape != (returns.size, returns.size):
-            raise ValueError("Expected returns and covariance dimensions do not match.")
+            return AllocationResult("INVALID_INPUT", zero_weights, False, "OPTIMIZATION_INVALID_DIMENSIONS")
         covariance = (covariance + covariance.T) / 2.0
         if np.min(np.linalg.eigvalsh(covariance)) < -1e-8:
-            raise ValueError("Covariance matrix must be positive semidefinite.")
+            return AllocationResult("INVALID_INPUT", zero_weights, False, "OPTIMIZATION_INVALID_COVARIANCE")
 
         weights = cp.Variable(returns.size)
         portfolio_variance = cp.quad_form(weights, cp.psd_wrap(covariance))
@@ -102,10 +113,34 @@ class ConvexPositionOptimizer:
             try:
                 problem.solve(solver=cp.SCS, warm_start=True)
             except Exception:
-                return np.zeros(returns.size)
+                return AllocationResult("SOLVER_ERROR", zero_weights, False, "OPTIMIZATION_SOLVER_ERROR")
         if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) or weights.value is None:
-            return np.zeros(returns.size)
-        return np.asarray(weights.value, dtype=float).reshape(-1)
+            return AllocationResult(str(problem.status).upper(), zero_weights, False, "OPTIMIZATION_INFEASIBLE")
+        solved_weights = np.asarray(weights.value, dtype=float).reshape(-1)
+        permitted = bool(np.any(np.abs(solved_weights) > 1e-10))
+        return AllocationResult(
+            "OPTIMAL",
+            solved_weights,
+            permitted,
+            "OPTIMIZATION_ACCEPTED" if permitted else "OPTIMIZATION_ZERO_ALLOCATION",
+        )
+
+    @staticmethod
+    def optimize_allocation(
+        expected_returns: np.ndarray,
+        covariance_matrix: np.ndarray,
+        max_drawdown_limit: float = 0.05,
+        max_single_position: float = 0.10,
+        risk_aversion: float = 0.5,
+    ) -> np.ndarray:
+        """Compatibility API returning only allocation weights."""
+        return ConvexPositionOptimizer.optimize_allocation_result(
+            expected_returns,
+            covariance_matrix,
+            max_drawdown_limit,
+            max_single_position,
+            risk_aversion,
+        ).weights
 
     def optimize(
         self,

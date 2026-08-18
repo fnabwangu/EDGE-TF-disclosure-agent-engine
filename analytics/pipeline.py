@@ -52,20 +52,21 @@ def process_disclosure_pipeline(
     )
 
     weights = np.zeros(len(expected_returns), dtype=float)
+    optimizer_status = "NOT_RUN"
+    optimizer_reason = "OPTIMIZATION_NOT_RUN"
     if execution_permitted:
-        try:
-            weights = ConvexPositionOptimizer.optimize_allocation(
-                expected_returns=np.asarray(expected_returns, dtype=float),
-                covariance_matrix=np.asarray(covariance_matrix, dtype=float),
-                max_drawdown_limit=max_drawdown_limit,
-                max_single_position=max_single_position,
-            )
-            if not np.any(np.abs(weights) > 1e-10):
-                execution_permitted = False
-                gate_reason = "NO_TRADE: optimizer infeasible or unavailable"
-        except (RuntimeError, ValueError):
+        allocation = ConvexPositionOptimizer.optimize_allocation_result(
+            expected_returns=np.asarray(expected_returns, dtype=float),
+            covariance_matrix=np.asarray(covariance_matrix, dtype=float),
+            max_drawdown_limit=max_drawdown_limit,
+            max_single_position=max_single_position,
+        )
+        weights = allocation.weights
+        optimizer_status = allocation.status
+        optimizer_reason = allocation.reason_code
+        if not allocation.trade_permitted:
             execution_permitted = False
-            gate_reason = "NO_TRADE: optimizer failed deterministically"
+            gate_reason = f"NO_TRADE: {allocation.reason_code}"
 
     return {
         "target_ticker": action.target_ticker,
@@ -73,6 +74,8 @@ def process_disclosure_pipeline(
         "diffusion_score": float(diffusion_score),
         "execution_permitted": execution_permitted,
         "gate_reason": gate_reason,
+        "optimizer_status": optimizer_status,
+        "optimizer_reason_code": optimizer_reason,
         "optimized_weights": weights,
     }
 
