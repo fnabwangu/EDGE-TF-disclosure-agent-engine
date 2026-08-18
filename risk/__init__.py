@@ -19,6 +19,7 @@ from .kill_switch import (
     KillSwitchTelemetry,
 )
 from .risk_governor import RiskGovernor, PreTradeAuditSummary
+from .exposure_reduction_engine import ExposureReductionEngine, ExposureReductionResult
 
 __all__ = [
     "DeterministicExecutionGate",
@@ -33,5 +34,7 @@ __all__ = [
     "KillSwitchTelemetry",
     "RiskGovernor",
     "PreTradeAuditSummary",
+    "ExposureReductionEngine",
+    "ExposureReductionResult",
 ]
 

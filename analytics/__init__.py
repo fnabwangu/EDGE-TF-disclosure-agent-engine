@@ -32,6 +32,9 @@ from .monthly_leverage_simulation import (
     MonthlyLeverageStep,
 )
 from .profit_taking_engine import ProfitTakingEngine, ProfitTakingThresholds, evaluate_profit_taking
+from .leverage_tranches import EvidenceState, EvidenceStateThresholds, LeveragePolicy, LeverageTranche, TrancheBook
+from .staged_leverage_gate import StagedLeverageDecision, StagedLeverageGate, StagedLeverageInputs
+from .dynamic_exposure_controller import DynamicExposureController, DynamicExposureResult
 
 __all__ = [
     "InstitutionalGraphEngine",
@@ -72,4 +75,14 @@ __all__ = [
     "ProfitTakingEngine",
     "ProfitTakingThresholds",
     "evaluate_profit_taking",
+    "EvidenceState",
+    "EvidenceStateThresholds",
+    "LeveragePolicy",
+    "LeverageTranche",
+    "TrancheBook",
+    "StagedLeverageDecision",
+    "StagedLeverageGate",
+    "StagedLeverageInputs",
+    "DynamicExposureController",
+    "DynamicExposureResult",
 ]
