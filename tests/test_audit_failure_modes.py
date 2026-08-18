@@ -8,7 +8,7 @@ from analytics.pipeline import process_disclosure_pipeline
 from core.etf_disclosures import ETFDisclosureIngestor, StaticETFDisclosureProvider
 from core.schemas import ManagerAction
 from risk.kill_switch import EmergencyKillSwitchEngine, KillSwitchState, TripTriggerType
-from src.quant_engine.manager_graph import ManagerGraphEngine, ManagerMetadata, compute_manager_graph_pipeline
+from analytics.manager_independence import ManagerGraphEngine, ManagerMetadata, compute_manager_graph_pipeline
 
 
 def etf_payload(available_time: datetime):

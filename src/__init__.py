@@ -1,8 +1,8 @@
-"""EDGE-TF disclosure agent engine - core package.
+"""Legacy compatibility namespace for the EDGE-TF engine.
 
-This module is intentionally lightweight. It provides package metadata and
-convenience exports for the inference public API without importing heavy
-dependencies at import time.
+Authoritative implementations live in the root packages: ``core``,
+``normalization``, ``ingestion``, ``analytics``, ``agents``, ``risk``,
+``execution``, and ``audit``. New product code must not import from ``src``.
 """
 
 __version__ = "0.1.0"

@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from tests import generate_synthetic_universe
-from src.quant_engine import QuantMatrixUtils
+from analytics.quant_matrix import QuantMatrixUtils
 from analytics.inav_calculator import INAVCalculator, OptionPositionState
 
 

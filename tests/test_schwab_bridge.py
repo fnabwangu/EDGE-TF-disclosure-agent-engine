@@ -1,4 +1,4 @@
-from src.execution.schwab_bridge import SchwabBridge
+from execution.schwab_bridge import SchwabBridge
 
 
 def test_schwab_bridge_submit_order():
@@ -81,7 +81,7 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 import json
 
-from src.execution.schwab_bridge import SchwabBridge, SchwabOrderRequest, SchwabAuthManager
+from execution.schwab_bridge import SchwabBridge, SchwabOrderRequest, SchwabAuthManager
 from risk.risk_governor import RiskGovernor
 
 

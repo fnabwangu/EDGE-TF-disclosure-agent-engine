@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from risk.risk_governor import RiskGovernor
-from src.ingestion.normalizer import DisclosureNormalizer
+from normalization.normalizer import DisclosureNormalizer
 
 
 VALID_RISK_CONFIG = {

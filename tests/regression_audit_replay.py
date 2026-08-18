@@ -106,9 +106,9 @@ import numpy as np
 import pandas as pd
 
 # Ingestion & Quant Imports
-from src.ingestion.normalizer import DisclosureNormalizer, IngestionMetadata
-from src.ingestion.corporate_actions import CorporateActionAdjuster, SplitEvent, RebalanceEvent
-from src.quant_engine.manager_graph import ManagerGraphEngine, ManagerMetadata
+from normalization.normalizer import DisclosureNormalizer, IngestionMetadata
+from ingestion.corporate_actions import CorporateActionAdjuster, SplitEvent, RebalanceEvent
+from analytics.manager_independence import ManagerGraphEngine, ManagerMetadata
 from analytics.institutional_graph_engine import InstitutionalGraphEngine
 
 
