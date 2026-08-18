@@ -105,4 +105,22 @@ class ManagerGraphEngine:
         return result.reset_index()
 
 
-__all__ = ["ManagerMetadata", "SecurityManagerMetrics", "ManagerGraphEngine"]
+def compute_manager_graph_pipeline(
+    holdings_df: pd.DataFrame,
+    fund_to_cluster_map: Dict[str, str],
+    holding_threshold: float = 0.001,
+    delta_threshold: float = 0.0001,
+) -> pd.DataFrame:
+    """Compatibility pipeline that excludes unknown manager relationships."""
+    if holdings_df.empty:
+        return pd.DataFrame(columns=["canonical_id", "manager_breadth", "manager_hhi", "manager_agreement", "signed_manager_agreement", "z_manager_breadth"])
+    known = holdings_df[holdings_df["fund_id"].isin(fund_to_cluster_map)].copy()
+    registry = {
+        fund_id: ManagerMetadata(fund_id=fund_id, adviser=cluster_id)
+        for fund_id, cluster_id in fund_to_cluster_map.items()
+    }
+    engine = ManagerGraphEngine(registry, holding_threshold, delta_threshold)
+    return engine.process_manager_network(known)
+
+
+__all__ = ["ManagerMetadata", "SecurityManagerMetrics", "ManagerGraphEngine", "compute_manager_graph_pipeline"]

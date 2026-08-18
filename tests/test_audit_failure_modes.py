@@ -8,7 +8,7 @@ from analytics.pipeline import process_disclosure_pipeline
 from core.etf_disclosures import ETFDisclosureIngestor, StaticETFDisclosureProvider
 from core.schemas import ManagerAction
 from risk.kill_switch import EmergencyKillSwitchEngine, KillSwitchState, TripTriggerType
-from src.quant_engine.manager_graph import ManagerGraphEngine, ManagerMetadata
+from src.quant_engine.manager_graph import ManagerGraphEngine, ManagerMetadata, compute_manager_graph_pipeline
 
 
 def etf_payload(available_time: datetime):
@@ -44,6 +44,15 @@ def test_unknown_manager_does_not_create_artificial_breadth():
 
     breadth = engine.compute_cluster_breadth(frame)
     assert breadth["SEC-A"] == 1
+
+
+def test_legacy_manager_pipeline_excludes_unknown_relationships():
+    frame = pd.DataFrame([
+        {"canonical_id": "SEC-A", "fund_id": "KNOWN", "u_normalized": 0.10, "effective_date": "2026-08-18"},
+        {"canonical_id": "SEC-A", "fund_id": "UNKNOWN", "u_normalized": 0.20, "effective_date": "2026-08-18"},
+    ])
+    result = compute_manager_graph_pipeline(frame, {"KNOWN": "ADVISER-A"})
+    assert result.loc[result["canonical_id"] == "SEC-A", "manager_breadth"].iloc[0] == 1
 
 
 def test_duplicate_manager_funds_are_deduplicated():
