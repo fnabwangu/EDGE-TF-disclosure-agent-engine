@@ -243,6 +243,44 @@ class SizingResult(BaseModel):
     reason_codes: List[str] = Field(default_factory=list)
 
 
+class ProfitAction(str, Enum):
+    """Deterministic exit ladder actions; never an LLM-authored instruction."""
+    CLOSE = "CLOSE"
+    SELL_33 = "SELL_33"
+    SELL_25 = "SELL_25"
+    REVALIDATE = "REVALIDATE"
+    HOLD = "HOLD"
+
+
+class ProfitTakingInputs(BaseModel):
+    """Normalized position state used to evaluate staged profit-taking rules.
+
+    ``generic_projected_return`` is the un-leveraged, generic-model return
+    projection for the same thesis; it is used only as a benchmark hurdle,
+    never as a target the deterministic ladder is allowed to override.
+    """
+    current_return: float
+    generic_projected_return: float
+    remaining_ev: float
+    minimum_remaining_ev: float
+    thesis_active: bool = True
+    catalyst_active: bool = True
+    invalidation_intact: bool = True
+    leverage: float = Field(gt=0.0)
+    original_capital: float = Field(gt=0.0)
+    current_position_value: float = Field(ge=0.0)
+
+
+class ProfitTakingResult(BaseModel):
+    """Deterministic exit-ladder decision, auditable against its reason codes."""
+    action: ProfitAction
+    fraction_to_sell: float
+    benchmark_capture_ratio: Optional[float]
+    capital_to_recover: float
+    requires_derisk_review: bool = False
+    reason_codes: List[str] = Field(default_factory=list)
+
+
 __all__ = [
     "DataSourceType",
     "MarketDataSnapshot",
@@ -263,4 +301,7 @@ __all__ = [
     "ConvictionResult",
     "LeverageLimits",
     "SizingResult",
+    "ProfitAction",
+    "ProfitTakingInputs",
+    "ProfitTakingResult",
 ]

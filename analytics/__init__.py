@@ -31,6 +31,7 @@ from .monthly_leverage_simulation import (
     MonthlyLeverageSimulator,
     MonthlyLeverageStep,
 )
+from .profit_taking_engine import ProfitTakingEngine, ProfitTakingThresholds, evaluate_profit_taking
 
 __all__ = [
     "InstitutionalGraphEngine",
@@ -68,4 +69,7 @@ __all__ = [
     "MonthlyLeverageSimulationResult",
     "MonthlyLeverageSimulator",
     "MonthlyLeverageStep",
+    "ProfitTakingEngine",
+    "ProfitTakingThresholds",
+    "evaluate_profit_taking",
 ]
