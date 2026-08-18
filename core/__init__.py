@@ -17,6 +17,7 @@ from .disclosure_crawler import (
     ExtractedDisclosure,
     FilingType,
 )
+from .config_validation import load_config, validate_config_directory
 
 __all__ = [
     "DataSourceType",
@@ -27,4 +28,6 @@ __all__ = [
     "DisclosureCrawler",
     "ExtractedDisclosure",
     "FilingType",
+    "load_config",
+    "validate_config_directory",
 ]

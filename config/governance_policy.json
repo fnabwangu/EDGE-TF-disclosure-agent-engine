@@ -1,244 +1,26 @@
 {
-  "max_single_stock_percent": 15,
-  "hitl_threshold": 0.7
-}
-## Portfolio Governance & Investment Mandate Policy (`config/governance_policy.json`)
-
-The `governance_policy.json` file codifies the institutional boundaries, regulatory mandates, fiduciary controls, and oversight protocols defined in the fund's registration statement (Form N-1A prospectus). It acts as the immutable rulebook that prevents style drift, unauthorized asset allocation, and regulatory non-compliance.
-
----
-
-### Key Schema Elements
-
-* **`fund_identity_and_mandate`:**
-  * `fund_type`: Registration structure under the Investment Company Act of 1940 (`ACTIVE_TRANSPARENT_ETF`, `PASSIVE_INDEX_ETF`, `SEMI_TRANSPARENT_ETF`).
-  * `rule_35d1_names_rule`: Enforces the SEC "Names Rule," requiring that at least 80% of net assets be invested in the asset type or geography suggested by the fund's name.
-  * `permitted_asset_classes`: Strict whitelist of eligible asset types (e.g., `US_EQUITIES`, `OPTIONS`, `US_TREASURIES_CASH`).
-* **`prohibited_transactions`:**
-  * `allow_naked_options`: Prevents unhedged short derivative positions.
-  * `allow_illiquid_assets`: Enforces the SEC 15% statutory cap on illiquid investments (Rule 22e-4).
-  * `allow_unregistered_securities`: Prohibits private placements or OTC penny stocks without an exemption.
-* **`liquidity_and_redemption_governance` (SEC Rule 22e-4):**
-  * `illiquid_investment_max_pct`: Hard 15% limit on assets that cannot be converted to cash within 7 days without significant market impact.
-  * `highly_liquid_investment_min_pct`: Minimum threshold of cash/short-term Treasuries held to meet redemptions without disrupting the core strategy.
-* **`human_oversight_and_kill_switches`:**
-  * `manual_override_authority`: List of corporate roles authorized to pause automated algorithmic trading (e.g., `CCO`, `LEAD_PM`).
-  * `automated_kill_switch_enabled`: Automatically freezes model rebalances if consecutive data or compliance errors exceed threshold.
-
----
-
-### Configuration Blueprint (`config/governance_policy.json`)
-
-```json
-{
   "version": "1.0.0",
+  "max_single_stock_percent": 15.0,
+  "hitl_threshold": 0.7,
   "fund_identity_and_mandate": {
     "fund_name": "Target Alpha Quantitative ETF",
     "fund_type": "ACTIVE_TRANSPARENT_ETF",
     "regulatory_regime": "ICA_1940_ACT",
     "names_rule_min_policy_weight": 0.80,
-    "permitted_asset_classes": [
-      "US_EQUITY_COMMON",
-      "US_EQUITY_ETF",
-      "EXCHANGE_TRADED_OPTIONS",
-      "US_TREASURIES",
-      "CASH_EQUIVALENTS"
-    ],
-    "benchmark_index": "SPY"
+    "permitted_asset_classes": ["US_EQUITY_COMMON", "US_EQUITY_ETF", "EXCHANGE_TRADED_OPTIONS", "US_TREASURIES", "CASH_EQUIVALENTS"]
   },
   "prohibited_transactions": {
-    "allow_naked_calls": false,
-    "allow_naked_puts": false,
-    "allow_short_selling_shares": false,
-    "allow_unregistered_private_placements": false,
-    "allow_crypto_spot": false,
-    "allow_commodities_physical": false
+    "allow_naked_options": false,
+    "allow_illiquid_assets": true,
+    "allow_unregistered_securities": false
   },
-  "liquidity_governance": {
-    "sec_rule": "22e-4",
-    "illiquid_asset_hard_cap": 0.15,
-    "highly_liquid_investment_minimum_pct": 0.10,
-    "days_to_liquidate_threshold": 7
+  "liquidity_and_redemption_governance": {
+    "illiquid_investment_max_pct": 0.15,
+    "highly_liquid_investment_min_pct": 0.10
   },
-  "governance_and_kill_switches": {
+  "human_oversight_and_kill_switches": {
+    "manual_override_authority": ["CHIEF_COMPLIANCE_OFFICER", "LEAD_PORTFOLIO_MANAGER"],
     "automated_kill_switch_enabled": true,
-    "max_consecutive_rejected_orders": 3,
-    "require_dual_approval_for_model_updates": true,
-    "designated_signatories": [
-      "CHIEF_COMPLIANCE_OFFICER",
-      "LEAD_PORTFOLIO_MANAGER"
-    ],
-    "audit_logging_retention_years": 7
+    "consecutive_rejection_threshold": 3
   }
 }
-
----
-
-```python
-import json
-import logging
-from dataclasses import dataclass
-from typing import Dict, List, Any, Optional
-import pandas as pd
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-
-@dataclass
-class GovernanceAuditResult:
-    is_authorized: bool
-    policy_violations: List[str]
-    audit_metrics: Dict[str, Any]
-
-
-class PortfolioGovernanceEngine:
-    """
-    Evaluates proposed portfolio allocations, asset class classifications, 
-    and transaction instructions against the immutable rules defined in governance_policy.json.
-    """
-
-    def __init__(self, config_path: str = "config/governance_policy.json"):
-        with open(config_path, "r") as f:
-            self.config = json.load(f)
-
-        self.mandate = self.config["fund_identity_and_mandate"]
-        self.prohibitions = self.config["prohibited_transactions"]
-        self.liquidity = self.config["liquidity_governance"]
-        self.controls = self.config["governance_and_kill_switches"]
-
-        self.kill_switch_engaged = False
-        self.consecutive_order_rejections = 0
-
-    def verify_names_rule_and_asset_classes(self, positions_df: pd.DataFrame) -> GovernanceAuditResult:
-        """
-        Validates SEC Rule 35d-1 (Names Rule - 80% policy) and asset whitelist adherence.
-        Expected DataFrame columns: ['ticker', 'asset_class', 'weight', 'qualifies_for_80pct_policy']
-        """
-        violations = []
-        df = positions_df.copy()
-
-        # 1. Whitelist Verification
-        permitted_classes = set(self.mandate["permitted_asset_classes"])
-        unauthorized_assets = df[~df["asset_class"].isin(permitted_classes)]
-
-        if not unauthorized_assets.empty:
-            for _, row in unauthorized_assets.iterrows():
-                violations.append(
-                    f"Asset Class Policy Breach: Asset '{row['ticker']}' has unauthorized "
-                    f"class '{row['asset_class']}' (Allowed: {list(permitted_classes)})."
-                )
-
-        # 2. SEC 80% Names Rule Compliance Check
-        qualifying_weight = df[df["qualifies_for_80pct_policy"]]["weight"].sum()
-        min_policy_weight = self.mandate.get("names_rule_min_policy_weight", 0.80)
-
-        if qualifying_weight < min_policy_weight:
-            violations.append(
-                f"SEC Rule 35d-1 Breach: Core mandate qualifying weight is {qualifying_weight:.2%}, "
-                f"which falls below the required {min_policy_weight:.2%} threshold."
-            )
-
-        metrics = {
-            "qualifying_mandate_weight": float(qualifying_weight),
-            "unauthorized_positions_count": len(unauthorized_assets)
-        }
-
-        return GovernanceAuditResult(
-            is_authorized=len(violations) == 0,
-            violations=violations,
-            audit_metrics=metrics
-        )
-
-    def verify_liquidity_framework(self, positions_df: pd.DataFrame) -> GovernanceAuditResult:
-        """
-        Validates SEC Rule 22e-4 Liquidity Mandates (Max 15% illiquid assets).
-        Expected DataFrame columns: ['ticker', 'weight', 'liquidity_tier']
-        Where 'liquidity_tier' is one of: 'HIGHLY_LIQUID', 'MODERATELY_LIQUID', 'LESS_LIQUID', 'ILLIQUID'
-        """
-        violations = []
-        df = positions_df.copy()
-
-        illiquid_weight = df[df["liquidity_tier"] == "ILLIQUID"]["weight"].sum()
-        max_illiquid = self.liquidity["illiquid_asset_hard_cap"]
-
-        if illiquid_weight > max_illiquid:
-            violations.append(
-                f"Rule 22e-4 Breach: Illiquid holdings aggregate to {illiquid_weight:.2%}, "
-                f"exceeding statutory hard cap of {max_illiquid:.2%}."
-            )
-
-        highly_liquid_weight = df[df["liquidity_tier"] == "HIGHLY_LIQUID"]["weight"].sum()
-        min_highly_liquid = self.liquidity.get("highly_liquid_investment_minimum_pct", 0.10)
-
-        if highly_liquid_weight < min_highly_liquid:
-            violations.append(
-                f"Liquidity Buffer Warning: Highly liquid assets aggregate to {highly_liquid_weight:.2%}, "
-                f"below governance buffer minimum of {min_highly_liquid:.2%}."
-            )
-
-        metrics = {
-            "illiquid_holdings_weight": float(illiquid_weight),
-            "highly_liquid_holdings_weight": float(highly_liquid_weight)
-        }
-
-        return GovernanceAuditResult(
-            is_authorized=len(violations) == 0,
-            violations=violations,
-            audit_metrics=metrics
-        )
-
-    def audit_trade_instruction(
-        self,
-        transaction_type: str,
-        asset_class: str,
-        is_covered: bool = True
-    ) -> GovernanceAuditResult:
-        """
-        Validates whether a proposed individual transaction passes prohibited-transaction filters.
-        """
-        violations = []
-
-        if self.kill_switch_engaged:
-            violations.append("Governance Kill Switch is ENGAGED. All outbound trading is halted.")
-
-        # Prohibited transaction verification
-        if transaction_type == "SHORT_SELL" and not self.prohibitions.get("allow_short_selling_shares", False):
-            violations.append("Prohibited Transaction: Direct short selling of underlying shares is barred.")
-
-        if transaction_type == "SELL_TO_OPEN_CALL" and not is_covered and not self.prohibitions.get("allow_naked_calls", False):
-            violations.append("Prohibited Transaction: Naked short call options are barred by fund policy.")
-
-        if transaction_type == "SELL_TO_OPEN_PUT" and not is_covered and not self.prohibitions.get("allow_naked_puts", False):
-            violations.append("Prohibited Transaction: Uncovered naked put writing is barred by fund policy.")
-
-        if asset_class == "CRYPTO_SPOT" and not self.prohibitions.get("allow_crypto_spot", False):
-            violations.append("Prohibited Transaction: Direct physical/spot cryptocurrency trading is prohibited.")
-
-        return GovernanceAuditResult(
-            is_authorized=len(violations) == 0,
-            violations=violations,
-            audit_metrics={"transaction_type": transaction_type, "asset_class": asset_class}
-        )
-
-    def record_execution_rejection(self):
-        """Monitors consecutive execution failures to trip the automated emergency kill switch."""
-        self.consecutive_order_rejections += 1
-        max_rejections = self.controls.get("max_consecutive_rejected_orders", 3)
-
-        if self.consecutive_order_rejections >= max_rejections and self.controls.get("automated_kill_switch_enabled", True):
-            self.kill_switch_engaged = True
-            logging.critical(
-                f"GOVERNANCE EMERGENCY: {self.consecutive_order_rejections} consecutive order rejections. "
-                f"Automated kill switch ENGAGED. Trading pipeline locked down."
-            )
-
-    def manual_override_kill_switch(self, role: str, unlock_code: str) -> bool:
-        """Allows authorized roles (e.g., CCO, PM) to disengage the emergency kill switch."""
-        designated = self.controls.get("designated_signatories", [])
-        if role in designated and unlock_code == "AUTHORIZED_GOVERNANCE_RESET":
-            self.kill_switch_engaged = False
-            self.consecutive_order_rejections = 0
-            logging.info(f"Kill switch disengaged by authorized role: {role}")
-            return True
-        logging.warning(f"Unauthorized attempt to reset kill switch by role: {role}")
-        return False

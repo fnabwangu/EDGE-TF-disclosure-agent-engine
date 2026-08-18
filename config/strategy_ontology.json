@@ -1,251 +1,30 @@
 {
-  "themes": ["Thematic A", "Thematic B"],
-  "functions": ["Long", "Short", "Hedging"]
-}
-## Strategy Ontology & Alpha Model Schema (`config/strategy_ontology.json`)
-
-The `strategy_ontology.json` file defines the formal domain model for quantitative signal generation, multi-factor weighting schemes, overlay structures (e.g., covered option writing, hedge overlays), and hierarchical capital allocation rules across sub-strategies.
-
----
-
-### Key Schema Elements
-
-* **`signal_taxonomy`:**
-  * Categorizes core quantitative factors (e.g., `MOMENTUM`, `VALUE`, `QUALITY`, `LOW_VOLATILITY`, `SENTIMENT`).
-  * `lookback_windows_days`: Defines historical observation frames for indicator computation.
-  * `normalization_method`: Scaling method for cross-sectional factor ranking (`Z_SCORE`, `MIN_MAX`, `WINSORIZED_Z_SCORE`).
-* **`factor_weighting_matrix`:**
-  * Base percentage allocations assigned to individual quantitative factor signals.
-  * `factor_interaction_mode`: How factor scores combine (`LINEAR_COMBINATION`, `MULTIPLICATIVE_GATING`, `HIERARCHICAL`).
-* **`overlay_mechanics` (Systematic Options / Hedging):**
-  * `overlay_type`: Structure of secondary derivative or cash overlays (`COVERED_CALL_OVERLAY`, `COLLAR`, `CASH_BUFFER_RESERVE`).
-  * `target_delta` & `dte_target_days`: Moneyness and expiration targets for systematic option legs.
-  * `roll_dte_threshold`: Expiration threshold triggering automated rolling of active derivative contracts.
-* **`allocation_hierarchy`:**
-  * Hierarchical allocation split between core underlying equities, active factor tilts, derivative overlays, and liquidity reserves.
-
----
-
-### Configuration Blueprint (`config/strategy_ontology.json`)
-
-```json
-{
   "version": "1.0.0",
   "strategy_identity": {
     "name": "Quantitative Quality Momentum with Covered Overlay",
-    "strategy_archetype": "SYSTEMATIC_ENHANCED_CORE",
-    "rebalance_cadence": "WEEKLY"
+    "mandate": "Institutional adoption and strategic relevance"
   },
   "signal_taxonomy": {
-    "normalization_method": "WINSORIZED_Z_SCORE",
-    "winsorize_limits": [-3.0, 3.0],
-    "factors": {
-      "MOMENTUM_12M_1M": {
-        "category": "MOMENTUM",
-        "description": "12-month trailing return minus the most recent 1-month return",
-        "lookback_days": 252,
-        "lag_days": 21,
-        "direction": "POSITIVE"
-      },
-      "RETURN_ON_EQUITY": {
-        "category": "QUALITY",
-        "description": "Trailing twelve months ROE calculated as net income over book value",
-        "lookback_days": 365,
-        "direction": "POSITIVE"
-      },
-      "REALIZED_VOLATILITY_60D": {
-        "category": "LOW_VOLATILITY",
-        "description": "60-day trailing annualized standard deviation of daily returns",
-        "lookback_days": 60,
-        "direction": "NEGATIVE"
-      }
-    }
+    "factors": ["MOMENTUM", "VALUE", "QUALITY", "LOW_VOLATILITY", "SENTIMENT"],
+    "lookback_windows_days": [20, 60, 252],
+    "normalization_method": "WINSORIZED_Z_SCORE"
   },
   "factor_weighting_matrix": {
-    "MOMENTUM_12M_1M": 0.40,
-    "RETURN_ON_EQUITY": 0.40,
-    "REALIZED_VOLATILITY_60D": 0.20
+    "weights": {"MOMENTUM": 0.25, "VALUE": 0.15, "QUALITY": 0.25, "LOW_VOLATILITY": 0.15, "SENTIMENT": 0.20},
+    "factor_interaction_mode": "LINEAR_COMBINATION"
   },
   "overlay_mechanics": {
     "overlay_type": "COVERED_CALL_OVERLAY",
-    "is_enabled": true,
-    "covered_call_target_delta": 0.30,
-    "target_dte_days": 30,
-    "roll_dte_threshold": 7,
-    "target_underlying_coverage_pct": 0.50
+    "target_delta": 0.70,
+    "dte_target_days": 365,
+    "roll_dte_threshold": 45
   },
   "allocation_hierarchy": {
-    "core_equity_sleeve_pct": 0.90,
-    "overlay_notional_cap_pct": 0.50,
-    "cash_reserve_pct": 0.10
-  }
+    "core_underlying_equities": 0.80,
+    "active_factor_tilts": 0.10,
+    "derivative_overlays": 0.05,
+    "liquidity_reserve": 0.05
+  },
+  "themes": ["Thematic A", "Thematic B"],
+  "functions": ["Long", "Short", "Hedging"]
 }
-
----
-
-```python
-import json
-import logging
-from dataclasses import dataclass
-from typing import Dict, List, Optional
-import numpy as np
-import pandas as pd
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
-
-@dataclass
-class ScoredAsset:
-    ticker: str
-    composite_alpha_score: float
-    target_equity_weight: float
-    covered_call_target_shares: int
-    factor_breakdown: Dict[str, float]
-
-
-@dataclass
-class StrategyEvaluationOutput:
-    ranked_universe: List[ScoredAsset]
-    cash_allocation_pct: float
-    total_equity_allocation_pct: float
-    summary: Dict[str, any]
-
-
-class StrategyOntologyEngine:
-    """
-    Parses strategy ontology, normalizes factor signals, computes composite
-    alpha rankings, and calculates core/overlay asset weights.
-    """
-
-    def __init__(self, config_path: str = "config/strategy_ontology.json"):
-        with open(config_path, "r") as f:
-            self.config = json.load(f)
-
-        self.strategy_meta = self.config["strategy_identity"]
-        self.signal_tax = self.config["signal_taxonomy"]
-        self.factor_weights = self.config["factor_weighting_matrix"]
-        self.overlay = self.config["overlay_mechanics"]
-        self.allocation = self.config["allocation_hierarchy"]
-
-    def normalize_factor_scores(self, raw_factor_series: pd.Series, direction: str = "POSITIVE") -> pd.Series:
-        """
-        Normalizes a factor cross-section using Winsorized Z-Score scaling.
-        """
-        mean = raw_factor_series.mean()
-        std = raw_factor_series.std()
-
-        if std == 0 or np.isnan(std):
-            return pd.Series(0.0, index=raw_factor_series.index)
-
-        # Calculate standard Z-Score
-        z_scores = (raw_factor_series - mean) / std
-
-        # Invert if the factor target direction is negative (e.g., lower volatility is better)
-        if direction.upper() == "NEGATIVE":
-            z_scores = -z_scores
-
-        # Winsorize outliers to bounded caps
-        min_cap, max_cap = self.signal_tax.get("winsorize_limits", [-3.0, 3.0])
-        return z_scores.clip(lower=min_cap, upper=max_cap)
-
-    def evaluate_alpha_signals(
-        self,
-        universe_data_df: pd.DataFrame,
-        total_fund_nav_usd: float
-    ) -> StrategyEvaluationOutput:
-        """
-        Computes multi-factor composite scores and derives portfolio target weights.
-
-        Expected DataFrame columns:
-          - 'ticker'
-          - Raw factor columns defined in configuration (e.g., 'MOMENTUM_12M_1M', 'RETURN_ON_EQUITY', 'REALIZED_VOLATILITY_60D')
-          - 'price'
-        """
-        df = universe_data_df.copy()
-        factor_defs = self.signal_tax["factors"]
-        normalized_cols = []
-
-        # 1. Normalize each factor individually
-        for factor_name, specs in factor_defs.items():
-            if factor_name in df.columns:
-                norm_col_name = f"norm_{factor_name}"
-                direction = specs.get("direction", "POSITIVE")
-                df[norm_col_name] = self.normalize_factor_scores(df[factor_name], direction=direction)
-                normalized_cols.append(norm_col_name)
-            else:
-                logging.warning(f"Factor '{factor_name}' missing from universe data frame. Defaulting to 0.")
-                df[f"norm_{factor_name}"] = 0.0
-                normalized_cols.append(f"norm_{factor_name}")
-
-        # 2. Compute composite weighted alpha score
-        df["composite_alpha_score"] = 0.0
-        for factor_name, weight in self.factor_weights.items():
-            norm_col_name = f"norm_{factor_name}"
-            df["composite_alpha_score"] += df[norm_col_name] * weight
-
-        # Sort universe descending by composite alpha score
-        df = df.sort_values(by="composite_alpha_score", ascending=False).reset_index(drop=True)
-
-        # 3. Derive target portfolio weights across the core equity sleeve
-        core_equity_pct = self.allocation.get("core_equity_sleeve_pct", 0.90)
-        cash_reserve_pct = self.allocation.get("cash_reserve_pct", 0.10)
-
-        # Apply softmax / positive-only scaling to positive alpha assets
-        positive_scores = df["composite_alpha_score"].clip(lower=0.0)
-        score_sum = positive_scores.sum()
-
-        if score_sum > 0:
-            df["target_equity_weight"] = (positive_scores / score_sum) * core_equity_pct
-        else:
-            # Fallback equal-weight allocation across universe
-            df["target_equity_weight"] = core_equity_pct / len(df)
-
-        # 4. Calculate systematic overlay sizing (e.g., covered call contracts)
-        overlay_enabled = self.overlay.get("is_enabled", False)
-        coverage_pct = self.overlay.get("target_underlying_coverage_pct", 0.50)
-
-        scored_assets: List[ScoredAsset] = []
-
-        for _, row in df.iterrows():
-            ticker = str(row["ticker"])
-            target_w = float(row["target_equity_weight"])
-            price = float(row.get("price", 1.0))
-            composite_score = float(row["composite_alpha_score"])
-
-            # Compute underlying share target
-            dollar_allocation = target_w * total_fund_nav_usd
-            target_underlying_shares = int(dollar_allocation / price) if price > 0 else 0
-
-            # Compute covered options contract targets (100 shares per contract)
-            covered_call_shares = 0
-            if overlay_enabled and target_underlying_shares >= 100:
-                eligible_shares = int(target_underlying_shares * coverage_pct)
-                # Round to nearest 100-share contract unit
-                covered_call_shares = (eligible_shares // 100) * 100
-
-            factor_breakdown = {f: float(row[f"norm_{f}"]) for f in self.factor_weights.keys()}
-
-            scored_assets.append(
-                ScoredAsset(
-                    ticker=ticker,
-                    composite_alpha_score=composite_score,
-                    target_equity_weight=target_w,
-                    covered_call_target_shares=covered_call_shares,
-                    factor_breakdown=factor_breakdown
-                )
-            )
-
-        summary = {
-            "strategy_name": self.strategy_meta.get("name"),
-            "evaluated_universe_size": len(df),
-            "allocated_equity_weight": float(df["target_equity_weight"].sum()),
-            "allocated_cash_weight": float(cash_reserve_pct),
-            "overlay_type": self.overlay.get("overlay_type") if overlay_enabled else "NONE"
-        }
-
-        return StrategyEvaluationOutput(
-            ranked_universe=scored_assets,
-            cash_allocation_pct=cash_reserve_pct,
-            total_equity_allocation_pct=core_equity_pct,
-            summary=summary
-        )

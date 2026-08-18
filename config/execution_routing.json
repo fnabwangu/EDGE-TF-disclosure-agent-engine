@@ -1,61 +1,26 @@
-## Execution Routing & Broker Integration (`config/execution_routing.json`)
-
-The `execution_routing.json` file configures the connectivity layer between the algorithmic strategy engine and institutional trading venues. It governs Order/Execution Management System (OMS/EMS) protocols, pre-trade Transaction Cost Analysis (TCA), dynamic slippage tolerance models, and post-trade reporting pipes for the fund's custodian and Authorized Participants (APs).
-
----
-
-### Key Schema Elements
-
-* **`environment_connectivity`:**
-  * `environment`: Active deployment mode (`production`, `staging_sandbox`, or `paper_trading`).
-  * `oms_protocol`: Network communication standard (`FIX_4_4`, `REST_API`, `GRPC`).
-  * `primary_broker_endpoint` / `backup_broker_endpoint`: Target routing gateways for institutional execution desks.
-  * `session_credentials_vault_key`: Reference path to secure credential stores (API keys, FIX CompIDs, SSL certificates).
-* **`algorithmic_execution_models`:**
-  * `default_algo_strategy`: Default execution algorithm (e.g., `TWAP`, `VWAP`, `POV`, `MOC`, `ARRIVAL_PRICE`).
-  * `max_participation_rate_pct`: Volume cap relative to current consolidated tape (e.g., max 10% of trailing volume) to limit market footprint.
-  * `urgency_level`: Execution speed setting (`LOW`, `MEDIUM`, `HIGH`).
-* **`slippage_and_tca_parameters`:**
-  * `max_allowable_slippage_bps`: Maximum permissible price divergence against the decision price before halting fills.
-  * `pre_trade_tca_model`: Theoretical impact model (`ALMGREN_CHRISS`, `LINEAR_SPREAD`, `SQUARE_ROOT_IMPACT`).
-  * `target_tca_benchmark`: Post-trade benchmark metric (`ARRIVAL_PRICE`, `VWAP_INTERVAL`, `CLOSING_PRICE`).
-* **`custodian_and_ap_reporting`:**
-  * `custodian_sftp_endpoint`: Secure file pipeline for daily custodial trade confirms and aggregate cash settlements.
-  * `ap_pcfr_reporting_endpoint`: Automated Portfolio Composition File (PCF) distribution endpoint to publish creation/redemption baskets before market open.
-  * `reporting_format`: Institutional delivery payload specification (`SWIFT_MT515`, `CSV_EOD`, `FIX_CONFIRM`).
-
----
-
-### Configuration Blueprint (`config/execution_routing.json`)
-
-```json
 {
   "version": "1.0.0",
   "environment_connectivity": {
     "environment": "staging_sandbox",
-    "oms_protocol": "FIX_4_4",
-    "primary_broker_endpoint": "fix://order-gateway.inst-broker.com:9800",
-    "backup_broker_endpoint": "fix://backup-gateway.inst-broker.com:9800",
-    "session_credentials_vault_key": "VAULT/PROD/BROKER_FIX_CREDS",
-    "timeout_seconds": 5
+    "oms_protocol": "REST_API",
+    "primary_broker_endpoint": "https://api.schwabapi.com/trader/v1",
+    "backup_broker_endpoint": "",
+    "session_credentials_vault_key": "VAULT/PROD/BROKER_API_CREDS",
+    "timeout_seconds": 15
   },
   "algorithmic_execution_models": {
     "default_algo_strategy": "VWAP",
     "max_participation_rate_pct": 0.10,
-    "urgency_level": "MEDIUM",
-    "min_clip_size_shares": 100,
-    "discretionary_price_offset_ticks": 1
+    "urgency_level": "MEDIUM"
   },
   "slippage_and_tca_parameters": {
-    "max_allowable_slippage_bps": 15.0,
+    "max_allowable_slippage_bps": 25.0,
     "pre_trade_tca_model": "SQUARE_ROOT_IMPACT",
-    "target_tca_benchmark": "ARRIVAL_PRICE",
-    "cancel_on_excessive_slippage": true
+    "target_tca_benchmark": "ARRIVAL_PRICE"
   },
   "custodian_and_ap_reporting": {
-    "custodian_sftp_endpoint": "sftp://[custody-drop.globalbank.com/trades/inbound](https://custody-drop.globalbank.com/trades/inbound)",
-    "ap_pcf_reporting_endpoint": "[https://api.etf-services.com/v1/pcf/publish](https://api.etf-services.com/v1/pcf/publish)",
-    "reporting_format": "CSV_EOD",
-    "transmit_pcf_cutoff_time": "08:30:00"
+    "custodian_sftp_endpoint": "",
+    "ap_pcfr_reporting_endpoint": "",
+    "reporting_format": "CSV_EOD"
   }
 }
