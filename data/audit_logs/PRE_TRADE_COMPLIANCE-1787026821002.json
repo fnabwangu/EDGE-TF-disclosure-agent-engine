@@ -1,0 +1,15 @@
+{
+  "record_id": "PRE_TRADE_COMPLIANCE-1787026821002",
+  "event_type": "PRE_TRADE_COMPLIANCE",
+  "timestamp_utc": "2026-08-18T04:20:21.002334+00:00",
+  "operator_id": "SYSTEM_RISK_GOVERNOR",
+  "role": "CHIEF_COMPLIANCE_OFFICER",
+  "payload": {
+    "passed": false,
+    "system_state": "NO_TRADE_PERMISSIBLE",
+    "violations": [
+      "CONFIG_INVALID: failed to load risk config from /tmp/pytest-of-codespace/pytest-21/test_invalid_risk_config_fails0/risk.json: Expecting value: line 1 column 1 (char 0)"
+    ]
+  },
+  "record_hash": "a75ba6042b199afcc9ca4083ea98ac2e173ea60ff3f51e17b3879e21be0c33ae"
+}

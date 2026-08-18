@@ -1,0 +1,58 @@
+{
+  "record_id": "PRE_TRADE_COMPLIANCE-1787026821004",
+  "event_type": "PRE_TRADE_COMPLIANCE",
+  "timestamp_utc": "2026-08-18T04:20:21.004516+00:00",
+  "operator_id": "SYSTEM_RISK_GOVERNOR",
+  "role": "CHIEF_COMPLIANCE_OFFICER",
+  "payload": {
+    "passed": true,
+    "target_weights": {
+      "XYZ": 0.1
+    },
+    "metrics": {
+      "relative_var": 1.0,
+      "illiquid_weight": 0.05,
+      "mandate_aligned_weight": 0.9,
+      "current_drawdown": 0.0
+    },
+    "gate_report": [
+      {
+        "rule_id": "IRC-SUB-M-SINGLE",
+        "verdict": "PASS",
+        "metric": 0.1,
+        "limit": 0.25,
+        "details": "Max single issuer weight: 10.00%"
+      },
+      {
+        "rule_id": "IRC-SUB-M-AGGREGATE",
+        "verdict": "PASS",
+        "metric": 0.1,
+        "limit": 0.5,
+        "details": "Aggregate weight of positions > 5%: 10.00%"
+      },
+      {
+        "rule_id": "SEC-18F4-VAR",
+        "verdict": "PASS",
+        "metric": 1.0,
+        "limit": 2.0,
+        "details": "Portfolio relative VaR: 1.00x"
+      },
+      {
+        "rule_id": "SEC-22E4-LIQ",
+        "verdict": "PASS",
+        "metric": 0.05,
+        "limit": 0.15,
+        "details": "Illiquid holdings percentage: 5.00%"
+      },
+      {
+        "rule_id": "SEC-35D1-NAMES",
+        "verdict": "PASS",
+        "metric": 0.9,
+        "limit": 0.8,
+        "details": "Mandate-aligned investment percentage: 90.00%"
+      }
+    ],
+    "violations": []
+  },
+  "record_hash": "8ea7e6863650c51a1f8baf23e06d81c217540319d3f69fd66d30a0bf5afc9f4f"
+}

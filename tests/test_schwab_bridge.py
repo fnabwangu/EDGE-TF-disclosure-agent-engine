@@ -20,7 +20,7 @@ from datetime import datetime
 import json
 
 # Test Pipeline Component Simulation
-def test_schwab_execution_pipeline_mock() -> dict:
+def test_schwab_execution_pipeline_mock() -> None:
     """
     Simulates validation, translation, and dispatch of trade orders to Charles Schwab.
     
@@ -61,12 +61,15 @@ def test_schwab_execution_pipeline_mock() -> dict:
     }
     
     # 3. Simulate authenticated dispatch
-    return {
+    result = {
         "status": "ORDER_SUBMITTED",
         "account_id": account_hash,
         "payload": schwab_payload,
         "broker_order_id": mock_api_response.get("order_id", "SCHWAB-ORD-99999")
     }
+    assert result["status"] == "ORDER_SUBMITTED"
+    assert result["account_id"] == account_hash
+    assert result["broker_order_id"] == "ORDER-1"
 
 """
 Edge-TF Disclosure Agent Engine - Charles Schwab Execution Bridge Tests
