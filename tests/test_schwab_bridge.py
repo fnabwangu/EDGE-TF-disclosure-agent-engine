@@ -79,7 +79,7 @@ from datetime import datetime
 import json
 
 from src.execution.schwab_bridge import SchwabBridge, SchwabOrderRequest, SchwabAuthManager
-from src.governance.risk_governor import RiskGovernor
+from risk.risk_governor import RiskGovernor
 
 
 class TestSchwabBridge(unittest.TestCase):

@@ -1,4 +1,4 @@
-from src.governance.deterministic_gates import ev_gate
+from risk.deterministic_execution_gate import GateVerdict
 
 
 def test_ev_gate():
@@ -50,9 +50,9 @@ import hashlib
 import json
 import pytest
 
-from src.governance.deterministic_gates import evaluate_deterministic_gates
-from src.governance.risk_governor import RiskGovernor
-from src.governance.kill_switch import KillSwitch
+from risk.deterministic_execution_gate import GateVerdict, evaluate_deterministic_gates
+from risk.risk_governor import RiskGovernor
+from risk.kill_switch import EmergencyKillSwitchEngine
 from src.governance.audit_logger import AuditLogger
 from src.inference.falsification_pass import evaluate_adversarial_falsification
 
@@ -186,11 +186,12 @@ def test_deterministic_gates_enforce_no_trade(dq_ok, falsify_ok, gov_ok):
 # ==============================================================================
 
 def test_kill_switch_lifecycle():
-    kill_switch = KillSwitch()
-    assert kill_switch.is_active() is False
+    kill_switch = EmergencyKillSwitchEngine()
+    assert kill_switch.is_locked is False
 
-    kill_switch.trip("DATA_CORRUPTION_FLAG_TRIPPED")
-    assert kill_switch.is_active() is True
+    from risk.kill_switch import TripTriggerType
+    kill_switch.trip(TripTriggerType.DATA_STALENESS, "DATA_CORRUPTION_FLAG_TRIPPED")
+    assert kill_switch.is_locked is True
 
 
 # ==============================================================================

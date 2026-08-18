@@ -34,7 +34,7 @@ import pandas as pd
 
 from src.execution import OrderInstruction, OrderType
 from src.governance.audit_logger import AuditEventType, AuditLogger
-from src.governance.risk_governor import PreTradeAuditSummary, RiskGovernor
+from risk.risk_governor import PreTradeAuditSummary, RiskGovernor
 from src.inference import ConstituentScore, CrossSectionalAlphaEngine, FactorType
 from src.inference.factor_pipeline import FactorPipeline
 from src.inference.falsification_pass import FalsificationEngine, FalsificationReport, FalsificationVerdict

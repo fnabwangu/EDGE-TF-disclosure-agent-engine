@@ -1,19 +1,14 @@
-"""risk_governor.py
-Hard sizing constraints placeholder.
 """
+EDGE-TF Disclosure Agent Engine - Comprehensive Risk Governor
 
-def check_single_stock_limit(position_pct: float, max_pct: float = 0.15) -> bool:
-    return position_pct <= max_pct
-# src/governance/risk_governor.py
-"""
-EDGE-TF Disclosure Agent Engine - Comprehensive Risk Governor.
+Path: risk/risk_governor.py
 
 Coordinates pre-trade statutory compliance, regulatory derivatives limits (SEC Rule 18f-4),
 liquidity mandates (SEC Rule 22e-4), Names Rule enforcement (SEC Rule 35d-1),
 and emergency circuit-breaker interactions before order release.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import logging

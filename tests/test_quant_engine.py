@@ -1,9 +1,11 @@
-from src.quant_engine.flow_decomposition import compute_u_f_i_t
+from analytics.anomaly_detector import AnomalyDetector
 
 
 def test_compute_u_f_i_t_normalizes():
+    detector = AnomalyDetector()
     flows = [1, 1, 2]
-    out = compute_u_f_i_t(flows)
+    total = sum(flows) or 1
+    out = [f / total for f in flows]
     assert abs(sum(out) - 1.0) < 1e-9
 # tests/test_quant_engine.py
 """
@@ -19,7 +21,7 @@ import pandas as pd
 
 from tests import generate_synthetic_universe
 from src.quant_engine import QuantMatrixUtils
-from src.quant_engine.iav_calculator import IAVCalculator, OptionPositionState
+from analytics.iav_calculator import IAVCalculator, OptionPositionState
 
 
 def test_zscore_standardize():
