@@ -12,6 +12,7 @@ CONFIG_DIR = Path(__file__).parents[1] / "config"
 def test_all_root_configs_are_valid_json_and_schema_compliant():
     configs = validate_config_directory(CONFIG_DIR)
     assert set(configs) == {
+        "conviction_policy.json",
         "data_sources.json",
         "execution_routing.json",
         "fund_universe.json",

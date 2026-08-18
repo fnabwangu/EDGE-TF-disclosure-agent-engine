@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "implementation_quality_weights": {
+    "iav": 0.25,
+    "aqd_quality": 0.15,
+    "anomaly_score": 0.10,
+    "manager_breadth_score": 0.15,
+    "persistence_score": 0.15,
+    "diffusion_score": 0.10,
+    "evidence_quality": 0.10
+  },
+  "ambiguity_penalty_weight": 0.25,
+  "quality_thresholds": {
+    "weak_max": 0.30,
+    "emerging_max": 0.60,
+    "confirmed_max": 0.80
+  },
+  "leverage_bounds": {
+    "min_leverage": 0.5,
+    "max_leverage": 2.0
+  },
+  "default_leverage_limits": {
+    "max_absolute_leverage": 2.0,
+    "max_trade_loss_pct": 0.075,
+    "volatility_limit": 0.15,
+    "liquidity_limit": 2.0,
+    "concentration_limit": 2.0,
+    "portfolio_limit": 2.0
+  }
+}

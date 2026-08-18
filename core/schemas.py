@@ -15,7 +15,7 @@ from enum import Enum
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 class DataSourceType(str, Enum):
     """Enumeration of supported data source types."""
@@ -165,6 +165,84 @@ class ETFDisclosureBundle(BaseModel):
     ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class EventScenario(BaseModel):
+    """One discrete legal/regulatory outcome branch with an assigned payoff."""
+    name: str
+    probability: float = Field(ge=0.0, le=1.0)
+    expected_return: float
+
+
+class EventProbability(BaseModel):
+    """Deterministic legal/event-arb scenario tree used to derive expected value.
+
+    ``expected_value`` is the probability-weighted payoff (EV = sum(p_s * r_s)),
+    not a leverage number. Scenario probabilities must sum to 1.0.
+    """
+    scenarios: List[EventScenario] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_probabilities_sum_to_one(self) -> "EventProbability":
+        total = sum(scenario.probability for scenario in self.scenarios)
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"EventProbability scenario probabilities must sum to 1.0, got {total}")
+        return self
+
+    @property
+    def expected_value(self) -> float:
+        return sum(scenario.probability * scenario.expected_return for scenario in self.scenarios)
+
+
+class ConvictionInputs(BaseModel):
+    """Normalized, deterministic evidence feeding the EDGE-TF conviction engine.
+
+    Every field is a pre-computed numerical feature produced upstream by
+    analytics modules (IAV, anomaly detector, manager graph, diffusion, hypothesis
+    quality). No field is an LLM-asserted confidence value.
+    """
+    event_expected_value: float
+    event_probability_quality: float = Field(ge=0.0, le=1.0)
+    iav: float = Field(ge=0.0, le=1.0)
+    aqd_quality: float = Field(ge=0.0, le=1.0)
+    anomaly_score: float = Field(ge=0.0, le=1.0)
+    manager_breadth_score: float = Field(ge=0.0, le=1.0)
+    persistence_score: float = Field(ge=0.0, le=1.0)
+    diffusion_score: float = Field(ge=0.0, le=1.0)
+    evidence_quality: float = Field(ge=0.0, le=1.0)
+    ambiguity_penalty: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class ConvictionResult(BaseModel):
+    """Deterministic output of the conviction engine; not a final leverage decision."""
+    implementation_quality: float
+    quality_tier: str
+    requested_leverage: float
+    reason_codes: List[str] = Field(default_factory=list)
+
+
+class LeverageLimits(BaseModel):
+    """Risk-governance-sourced ceilings applied independently of conviction."""
+    max_absolute_leverage: float = Field(gt=0.0)
+    max_trade_loss_pct: float = Field(gt=0.0)
+    volatility_limit: float = Field(gt=0.0)
+    liquidity_limit: float = Field(gt=0.0)
+    concentration_limit: float = Field(gt=0.0)
+    portfolio_limit: float = Field(gt=0.0)
+
+
+class SizingResult(BaseModel):
+    """Final deterministic hand-off from risk-capped leverage to the order router."""
+    requested_leverage: float
+    approved_leverage: float
+    limiting_constraint: str
+    target_notional: float
+    long_notional: Optional[float] = None
+    short_notional: Optional[float] = None
+    shares: Optional[int] = None
+    contracts: Optional[int] = None
+    execution_permitted: bool
+    reason_codes: List[str] = Field(default_factory=list)
+
+
 __all__ = [
     "DataSourceType",
     "MarketDataSnapshot",
@@ -179,4 +257,10 @@ __all__ = [
     "ETFRebalanceEvent",
     "CorporateActionObservation",
     "ETFDisclosureBundle",
+    "EventScenario",
+    "EventProbability",
+    "ConvictionInputs",
+    "ConvictionResult",
+    "LeverageLimits",
+    "SizingResult",
 ]

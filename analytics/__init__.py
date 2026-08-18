@@ -22,6 +22,15 @@ from .pipeline import process_disclosure_pipeline
 from .quant_matrix import QuantMatrixUtils, OptimizationConstraints, OptimizationObjective, QuantEngineDiagnostics, RiskModelType
 from .manager_independence import ManagerGraphEngine, ManagerMetadata, SecurityManagerMetrics, compute_manager_graph_pipeline
 from .hypothesis_quality import HypothesisQualityResult, HypothesisQualityScorer
+from .conviction_engine import ConvictionEngine
+from .leverage_engine import LeverageDecision, LeverageEngine
+from .position_sizer import PositionSizer
+from .monthly_leverage_simulation import (
+    MonthlyEvidenceSnapshot,
+    MonthlyLeverageSimulationResult,
+    MonthlyLeverageSimulator,
+    MonthlyLeverageStep,
+)
 
 __all__ = [
     "InstitutionalGraphEngine",
@@ -51,4 +60,12 @@ __all__ = [
     "compute_manager_graph_pipeline",
     "HypothesisQualityResult",
     "HypothesisQualityScorer",
+    "ConvictionEngine",
+    "LeverageDecision",
+    "LeverageEngine",
+    "PositionSizer",
+    "MonthlyEvidenceSnapshot",
+    "MonthlyLeverageSimulationResult",
+    "MonthlyLeverageSimulator",
+    "MonthlyLeverageStep",
 ]
