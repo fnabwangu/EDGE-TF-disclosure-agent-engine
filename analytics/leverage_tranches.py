@@ -33,6 +33,11 @@ _STATE_RANK = {
     EvidenceState.STRONG: 4,
 }
 
+# Public alias: ordinal rank of each evidence state, used wherever "has evidence
+# improved since X" must be answered outside this module (e.g. the persistent
+# profit-protected leverage ceiling in DynamicExposureController).
+EVIDENCE_STATE_RANK = _STATE_RANK
+
 
 @dataclass(frozen=True)
 class EvidenceStateThresholds:
@@ -163,6 +168,7 @@ class TrancheBook:
 
 __all__ = [
     "EvidenceState",
+    "EVIDENCE_STATE_RANK",
     "EvidenceStateThresholds",
     "LeveragePolicy",
     "LeverageTranche",
