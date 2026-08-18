@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.governance.audit_logger import AuditEventType, AuditLogger
+from audit.audit_logger import AuditEventType, AuditLogger
 from risk.deterministic_execution_gate import (
     DeterministicExecutionGate,
     GateAuditReport,

@@ -77,4 +77,4 @@ def generate_synthetic_universe(
 __all__ = [
     "SyntheticMarketUniverse",
     "generate_synthetic_universe",
-]tests package
+]

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Any
 import numpy as np
 import pandas as pd
+import networkx as nx
 import logging
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class InstitutionalGraphEngine:
 
     def __init__(
         self,
-        fund_theme_map: Dict[str, str],
+        fund_theme_map: Optional[Dict[str, str]] = None,
         ontology_distance_matrix: Optional[pd.DataFrame] = None,
         min_holding_threshold: float = 0.005,
     ):
@@ -48,6 +49,20 @@ class InstitutionalGraphEngine:
         self.fund_theme_map = fund_theme_map
         self.distance_matrix = ontology_distance_matrix
         self.min_threshold = min_holding_threshold
+        self.graph = nx.DiGraph()
+
+    def update_graph(self, manager: str, ticker: str, weight: float) -> None:
+        """Add or replace a deterministic manager-to-security edge."""
+        if weight < 0:
+            raise ValueError("Graph edge weights cannot be negative.")
+        self.graph.add_edge(manager, ticker, weight=float(weight))
+
+    def calculate_diffusion_score(self, target_ticker: str) -> float:
+        """Return the target's weighted PageRank score, or zero if unknown."""
+        if not self.graph.has_node(target_ticker):
+            return 0.0
+        scores = nx.pagerank(self.graph, weight="weight")
+        return float(scores.get(target_ticker, 0.0))
 
     def calculate_pairwise_distance(self, theme_a: str, theme_b: str) -> float:
         """
@@ -193,6 +208,7 @@ class InstitutionalGraphEngine:
             
             edges.append((fund, security))
             weights[(fund, security)] = float(weight)
+            self.update_graph(fund, security, float(weight))
 
         nodes = set()
         for edge in edges:

@@ -27,7 +27,7 @@ class AnomalyDetector:
     def __init__(
         self,
         z_score_threshold: float = 2.0,
-        min_history_periods: int = 2,
+        min_history_periods: int = 20,
     ):
         """
         Args:
@@ -36,6 +36,17 @@ class AnomalyDetector:
         """
         self.z_threshold = z_score_threshold
         self.min_history = min_history_periods
+
+    @staticmethod
+    def calculate_flow_zscore(current_flow: float, historical_flows: list[float]) -> float:
+        """Calculate a sample-standard-deviation Z-score against a fixed baseline."""
+        if len(historical_flows) < 20:
+            return 0.0
+        baseline = np.asarray(historical_flows, dtype=float)
+        std_dev = float(stats.tstd(baseline))
+        if not np.isfinite(std_dev) or std_dev == 0.0:
+            return 0.0
+        return float((current_flow - float(np.mean(baseline))) / std_dev)
 
     def compute_normalized_units(
         self,

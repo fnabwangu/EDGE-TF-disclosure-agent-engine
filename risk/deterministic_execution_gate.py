@@ -67,6 +67,9 @@ class DeterministicExecutionGate:
         sec_35d1_names_rule_floor: float = 0.80,
         max_bid_ask_spread_bps: float = 50.0,
         min_daily_volume_usd: float = 1_000_000.0,
+        min_zscore: float = 1.96,
+        min_diffusion: float = 0.01,
+        max_spread_pct: float = 0.02,
     ):
         """
         Args:
@@ -87,6 +90,28 @@ class DeterministicExecutionGate:
         self.names_rule_floor = sec_35d1_names_rule_floor
         self.max_spread_bps = max_bid_ask_spread_bps
         self.min_volume_usd = min_daily_volume_usd
+        self.min_zscore = min_zscore
+        self.min_diffusion = min_diffusion
+        self.max_spread_pct = max_spread_pct
+
+    def verify_order(
+        self,
+        z_score: float,
+        diffusion_score: float,
+        bid_price: float,
+        ask_price: float,
+    ) -> tuple[bool, str]:
+        """Apply immutable signal and market-quality gates before routing an order."""
+        if z_score < self.min_zscore:
+            return False, f"REJECTED: Signal Z-score ({z_score:.2f}) below threshold ({self.min_zscore:.2f})"
+        if diffusion_score < self.min_diffusion:
+            return False, f"REJECTED: Network diffusion ({diffusion_score:.4f}) below minimum ({self.min_diffusion:.4f})"
+        if bid_price <= 0 or ask_price <= 0 or ask_price < bid_price:
+            return False, "REJECTED: Invalid bid/ask market data"
+        spread = (ask_price - bid_price) / ask_price
+        if spread > self.max_spread_pct:
+            return False, f"REJECTED: Bid-ask spread ({spread:.2%}) exceeds liquidity limit ({self.max_spread_pct:.2%})"
+        return True, "ACCEPTED"
 
     def evaluate_subchapter_m(self, weights: Dict[str, float]) -> List[RuleEvaluationResult]:
         """

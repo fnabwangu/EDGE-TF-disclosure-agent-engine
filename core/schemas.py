@@ -10,14 +10,11 @@ Pydantic and dataclass models defining canonical data contracts for:
 - Ingestion batch reports
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
-import logging
+from typing import Any, Dict, List, Optional, Literal
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-
+from pydantic import BaseModel, Field
 
 class DataSourceType(str, Enum):
     """Enumeration of supported data source types."""
@@ -27,8 +24,7 @@ class DataSourceType(str, Enum):
     SYNTHETIC_SIMULATOR = "SYNTHETIC_SIMULATOR"
 
 
-@dataclass
-class MarketDataSnapshot:
+class MarketDataSnapshot(BaseModel):
     """Real-time market data snapshot for a single security."""
     ticker: str
     timestamp_utc: str
@@ -41,8 +37,7 @@ class MarketDataSnapshot:
     data_source: DataSourceType = DataSourceType.MARKET_DATA_FEED
 
 
-@dataclass
-class IngestionBatchReport:
+class IngestionBatchReport(BaseModel):
     """Summary report of a data ingestion batch."""
     batch_id: str
     timestamp_utc: str
@@ -55,30 +50,25 @@ class IngestionBatchReport:
     canonical_storage_path: Optional[str] = None
 
 
-@dataclass
-class DisclosurePayload:
-    """Canonical disclosure record extracted from regulatory filings."""
-    disclosure_id: str
-    ticker: str
-    filing_date: str
-    filing_type: str
-    extracted_text: str
-    sections_map: Dict[str, str] = field(default_factory=dict)
-    raw_payload_hash: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+class ManagerAction(BaseModel):
+    """Strict, machine-readable action extracted from a disclosure."""
+    source_entity: str
+    target_ticker: str
+    action_type: Literal["ACCUMULATE", "DIVEST", "SHORT", "OPTION_LEAP", "STAKE_INCREASE"]
+    reported_shares_delta: float
+    reported_conviction_indicators: List[str] = Field(default_factory=list)
 
 
-@dataclass
-class ManagerAction:
-    """Canonical manager action record (trade, rebalance, allocation change)."""
-    action_id: str
-    manager_id: str
-    action_type: str  # "TRADE", "REBALANCE", "ALLOCATION_CHANGE"
-    securities: Dict[str, float]  # ticker -> weight or quantity
-    timestamp_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    rationale: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+class DisclosurePayload(BaseModel):
+    """Typed contract passed from semantic extraction into deterministic code."""
+    filing_id: str
+    filing_timestamp: int
+    actions: List[ManagerAction] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def timestamp_utc(self) -> str:
+        return datetime.fromtimestamp(self.filing_timestamp, timezone.utc).isoformat()
 
 
 __all__ = [

@@ -17,6 +17,7 @@ from .options_modeler import (
     structure_leap_expression,
     generate_scenario_surface,
 )
+from .pipeline import process_disclosure_pipeline
 
 __all__ = [
     "InstitutionalGraphEngine",
@@ -31,4 +32,5 @@ __all__ = [
     "select_duration_matched_expiry",
     "structure_leap_expression",
     "generate_scenario_surface",
+    "process_disclosure_pipeline",
 ]

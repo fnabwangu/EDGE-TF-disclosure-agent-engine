@@ -11,7 +11,10 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
-import cvxpy as cp
+try:
+    import cvxpy as cp
+except ImportError:  # Keep graph and statistical analytics importable without the solver extra.
+    cp = None
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,52 @@ class ConvexPositionOptimizer:
         """
         self.params = params or OptimizerParameters()
 
+    @staticmethod
+    def optimize_allocation(
+        expected_returns: np.ndarray,
+        covariance_matrix: np.ndarray,
+        max_drawdown_limit: float = 0.05,
+        max_single_position: float = 0.10,
+        risk_aversion: float = 0.5,
+    ) -> np.ndarray:
+        """Solve a long-only risk-constrained allocation problem.
+
+        ``max_drawdown_limit`` is represented by a hard annualized variance
+        budget because drawdown itself is path-dependent and not convex.
+        Infeasible or solver-failed problems return an all-zero allocation.
+        """
+        if cp is None:
+            raise RuntimeError("CVXPY is required for deterministic portfolio optimization.")
+        returns = np.asarray(expected_returns, dtype=float).reshape(-1)
+        covariance = np.asarray(covariance_matrix, dtype=float)
+        if returns.size == 0 or covariance.shape != (returns.size, returns.size):
+            raise ValueError("Expected returns and covariance dimensions do not match.")
+        covariance = (covariance + covariance.T) / 2.0
+        if np.min(np.linalg.eigvalsh(covariance)) < -1e-8:
+            raise ValueError("Covariance matrix must be positive semidefinite.")
+
+        weights = cp.Variable(returns.size)
+        portfolio_variance = cp.quad_form(weights, cp.psd_wrap(covariance))
+        problem = cp.Problem(
+            cp.Maximize(returns @ weights - risk_aversion * portfolio_variance),
+            [
+                cp.sum(weights) <= 1.0,
+                weights >= 0.0,
+                weights <= max_single_position,
+                portfolio_variance <= max_drawdown_limit,
+            ],
+        )
+        try:
+            problem.solve(solver=cp.CLARABEL, warm_start=True)
+        except Exception:
+            try:
+                problem.solve(solver=cp.SCS, warm_start=True)
+            except Exception:
+                return np.zeros(returns.size)
+        if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) or weights.value is None:
+            return np.zeros(returns.size)
+        return np.asarray(weights.value, dtype=float).reshape(-1)
+
     def optimize(
         self,
         exposure_matrix: pd.DataFrame,
@@ -79,6 +128,8 @@ class ConvexPositionOptimizer:
         Returns:
             OptimizationResult with status, weights, and exposures.
         """
+        if cp is None:
+            raise RuntimeError("CVXPY is required for deterministic portfolio optimization.")
         securities = exposure_matrix.index.tolist()
         functions = exposure_matrix.columns.tolist()
         n = len(securities)

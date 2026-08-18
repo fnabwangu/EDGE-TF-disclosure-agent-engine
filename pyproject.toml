@@ -6,6 +6,9 @@ dependencies = [
     "numpy>=1.25",
     "pandas>=2.2",
     "networkx>=3.0",
+    "scipy>=1.11",
+    "cvxpy>=1.4",
+    "pydantic>=2.0",
     "streamlit>=1.24",
     "requests>=2.30"
 ]

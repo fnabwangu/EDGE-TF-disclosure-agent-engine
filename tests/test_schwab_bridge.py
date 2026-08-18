@@ -20,11 +20,7 @@ from datetime import datetime
 import json
 
 # Test Pipeline Component Simulation
-def test_schwab_execution_pipeline_mock(
-    order_instruction: dict,
-    account_hash: str,
-    mock_api_response: dict
-) -> dict:
+def test_schwab_execution_pipeline_mock() -> dict:
     """
     Simulates validation, translation, and dispatch of trade orders to Charles Schwab.
     
@@ -33,6 +29,13 @@ def test_schwab_execution_pipeline_mock(
       - account_hash: Encrypted/hashed Schwab target account identifier
       - mock_api_response: Mocked response payload from Schwab endpoint
     """
+    order_instruction = {
+        "symbol": "AAPL", "quantity": 1, "order_type": "MARKET",
+        "duration": "DAY", "session": "NORMAL",
+    }
+    account_hash = "ACC_HASH"
+    mock_api_response = {"order_id": "ORDER-1"}
+
     # 1. Validate payload fields
     required_keys = ["symbol", "quantity", "order_type", "duration", "session"]
     for key in required_keys:
