@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Protocol
 
+from risk.kill_switch import EmergencyKillSwitchEngine
+
 
 @dataclass(frozen=True)
 class OrderRequest:
@@ -20,10 +22,13 @@ class BrokerClient(Protocol):
 class OrderRouter:
     """Routes only orders that have already passed a hard execution gate."""
 
-    def __init__(self, broker: BrokerClient):
+    def __init__(self, broker: BrokerClient, kill_switch: EmergencyKillSwitchEngine | None = None):
         self.broker = broker
+        self.kill_switch = kill_switch
 
     def route(self, request: OrderRequest, execution_permitted: bool) -> Dict[str, Any]:
+        if self.kill_switch is not None and self.kill_switch.is_locked:
+            return {"status": "REJECTED", "reason": "KILL_SWITCH_LOCKED"}
         if not execution_permitted:
             return {"status": "REJECTED", "reason": "Deterministic execution gate failed"}
         if request.quantity <= 0 or request.symbol.strip() == "":

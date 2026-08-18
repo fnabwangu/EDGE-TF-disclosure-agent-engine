@@ -14,7 +14,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -54,6 +54,11 @@ class KillSwitchTelemetry:
     signatures_collected: List[ResetSignature] = field(default_factory=list)
 
 
+class ExecutionControl(Protocol):
+    def cancel_all_open_orders(self) -> Any: ...
+    def reconcile_positions(self) -> Any: ...
+
+
 class EmergencyKillSwitchEngine:
     """
     Stateful circuit breaker that intercepts execution pipelines upon anomaly detection
@@ -65,6 +70,8 @@ class EmergencyKillSwitchEngine:
         consecutive_rejection_threshold: int = 3,
         authorized_reset_roles: Optional[Set[str]] = None,
         state_path: Optional[Path] = None,
+        execution_control: Optional[ExecutionControl] = None,
+        authorization_verifier: Optional[Callable[[str, str, str], bool]] = None,
     ):
         self.rejection_threshold = consecutive_rejection_threshold
         self.authorized_roles = authorized_reset_roles or {
@@ -80,6 +87,9 @@ class EmergencyKillSwitchEngine:
         self.trip_timestamp_utc: Optional[str] = None
         self.reset_signatures: Dict[str, ResetSignature] = {}
         self.state_path = Path(state_path) if state_path else None
+        self.execution_control = execution_control
+        self.authorization_verifier = authorization_verifier
+        self.control_actions: Dict[str, str] = {}
         self._load_state()
 
     def _load_state(self) -> None:
@@ -91,6 +101,11 @@ class EmergencyKillSwitchEngine:
             self.consecutive_rejections = int(payload.get("consecutive_rejections", 0))
             self.active_trigger_reason = payload.get("active_trigger_reason")
             self.trip_timestamp_utc = payload.get("trip_timestamp_utc")
+            self.control_actions = dict(payload.get("control_actions", {}))
+            self.reset_signatures = {
+                item["role"]: ResetSignature(**item)
+                for item in payload.get("reset_signatures", [])
+            }
         except (OSError, ValueError, KeyError) as exc:
             self.state = KillSwitchState.TRIPPED_AUTO
             self.active_trigger_reason = f"[STATE_INVALID] Kill-switch state could not be restored: {exc}"
@@ -104,6 +119,8 @@ class EmergencyKillSwitchEngine:
             "consecutive_rejections": self.consecutive_rejections,
             "active_trigger_reason": self.active_trigger_reason,
             "trip_timestamp_utc": self.trip_timestamp_utc,
+            "control_actions": self.control_actions,
+            "reset_signatures": [signature.__dict__ for signature in self.reset_signatures.values()],
         }
         temp_path = self.state_path.with_suffix(self.state_path.suffix + ".tmp")
         temp_path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
@@ -153,6 +170,18 @@ class EmergencyKillSwitchEngine:
         self.active_trigger_reason = f"[{trigger.value}] {reason}"
         self.trip_timestamp_utc = datetime.now(timezone.utc).isoformat()
         self.reset_signatures.clear()
+
+        self.control_actions = {}
+        if self.execution_control is not None:
+            for action_name, action in (
+                ("cancel_open_orders", self.execution_control.cancel_all_open_orders),
+                ("reconcile_positions", self.execution_control.reconcile_positions),
+            ):
+                try:
+                    action()
+                    self.control_actions[action_name] = "COMPLETED"
+                except Exception as exc:
+                    self.control_actions[action_name] = f"FAILED: {exc}"
         
         logging.critical(
             f"!!! KILL SWITCH TRIPPED !!! -> Trading and AP publications HALTED. Reason: {self.active_trigger_reason}"
@@ -171,6 +200,9 @@ class EmergencyKillSwitchEngine:
         if not self.is_locked:
             logging.info("Reset ignored: Kill switch is currently nominal.")
             return self.get_telemetry()
+
+        if self.authorization_verifier is None or not self.authorization_verifier(signor_id, role, justification):
+            raise PermissionError("Authenticated restart authorization is required to reset the kill switch.")
 
         if role not in self.authorized_roles:
             raise PermissionError(
@@ -203,6 +235,7 @@ class EmergencyKillSwitchEngine:
             self._disengage_lock()
         else:
             self.state = KillSwitchState.AWAITING_DUAL_AUTH
+            self._persist_state()
 
         return self.get_telemetry()
 
@@ -235,4 +268,5 @@ __all__ = [
     "ResetSignature",
     "KillSwitchTelemetry",
     "EmergencyKillSwitchEngine",
+    "ExecutionControl",
 ]

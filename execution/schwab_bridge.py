@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 import requests
 
+from risk.kill_switch import EmergencyKillSwitchEngine
+
 
 @dataclass(frozen=True)
 class SchwabOrderRequest:
@@ -27,10 +29,11 @@ class SchwabAuthManager:
 
 
 class SchwabBridge:
-    def __init__(self, auth_manager: Optional[SchwabAuthManager] = None, base_url: str = "https://api.schwabapi.com/trader/v1", enforce_dry_run: bool = True, token: str = ""):
+    def __init__(self, auth_manager: Optional[SchwabAuthManager] = None, base_url: str = "https://api.schwabapi.com/trader/v1", enforce_dry_run: bool = True, token: str = "", kill_switch: Optional[EmergencyKillSwitchEngine] = None):
         self.auth_manager = auth_manager or SchwabAuthManager(access_token=token)
         self.base_url = base_url.rstrip("/")
         self.enforce_dry_run = enforce_dry_run
+        self.kill_switch = kill_switch
 
     def build_schwab_order_payload(self, request: SchwabOrderRequest) -> Dict[str, Any]:
         if request.quantity <= 0 or not request.symbol:
@@ -47,6 +50,8 @@ class SchwabBridge:
         return payload
 
     def submit_order(self, request: SchwabOrderRequest | Dict[str, Any]) -> Dict[str, Any]:
+        if self.kill_switch is not None and self.kill_switch.is_locked:
+            return {"status": "REJECTED", "reason": "KILL_SWITCH_LOCKED"}
         if isinstance(request, dict):
             request = SchwabOrderRequest(symbol=request["symbol"], quantity=request.get("qty", request.get("quantity", 0)))
             self.build_schwab_order_payload(request)
