@@ -21,6 +21,7 @@ from .options_modeler import (
 from .pipeline import process_disclosure_pipeline
 from .quant_matrix import QuantMatrixUtils, OptimizationConstraints, OptimizationObjective, QuantEngineDiagnostics, RiskModelType
 from .manager_independence import ManagerGraphEngine, ManagerMetadata, SecurityManagerMetrics, compute_manager_graph_pipeline
+from .hypothesis_quality import HypothesisQualityResult, HypothesisQualityScorer
 
 __all__ = [
     "InstitutionalGraphEngine",
@@ -48,4 +49,6 @@ __all__ = [
     "ManagerMetadata",
     "SecurityManagerMetrics",
     "compute_manager_graph_pipeline",
+    "HypothesisQualityResult",
+    "HypothesisQualityScorer",
 ]

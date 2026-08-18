@@ -38,7 +38,6 @@ class InvestmentHypothesis:
     primary_catalyst: CatalystType
     falsification_criteria: FalsificationCriteria
     status: ThesisStatus = ThesisStatus.ACTIVE
-    conviction_score: float = 0.75
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, object]:
@@ -49,7 +48,6 @@ class InvestmentHypothesis:
             "thesis_statement": self.thesis_statement,
             "primary_catalyst": self.primary_catalyst.value,
             "status": self.status.value,
-            "conviction_score": self.conviction_score,
         }
 
 
@@ -59,9 +57,7 @@ class HypothesisAgent:
     def __init__(self):
         self.registry: Dict[str, InvestmentHypothesis] = {}
 
-    def register_hypothesis(self, ticker: str, thematic_cluster: str, thesis_statement: str, primary_catalyst: CatalystType, conviction_score: float = 0.80, **criteria) -> InvestmentHypothesis:
-        if not 0.0 <= conviction_score <= 1.0:
-            raise ValueError("conviction_score must be between 0 and 1")
+    def register_hypothesis(self, ticker: str, thematic_cluster: str, thesis_statement: str, primary_catalyst: CatalystType, **criteria) -> InvestmentHypothesis:
         hypothesis_id = f"HYP-{ticker}-{len(self.registry) + 1:04d}"
         hypothesis = InvestmentHypothesis(
             hypothesis_id=hypothesis_id,
@@ -69,7 +65,6 @@ class HypothesisAgent:
             thematic_cluster=thematic_cluster,
             thesis_statement=thesis_statement,
             primary_catalyst=primary_catalyst,
-            conviction_score=conviction_score,
             falsification_criteria=FalsificationCriteria(
                 invalidation_drawdown_pct=criteria.get("invalidation_drawdown_pct", 0.12),
                 max_underperformance_vs_benchmark_bps=criteria.get("max_underperformance_bps", 500.0),
