@@ -12,7 +12,7 @@ def test_compute_u_f_i_t_normalizes():
 EDGE-TF Disclosure Agent Engine - Quantitative Engine Unit Tests.
 
 Validates matrix utilities, shrinkage covariance matrix estimation,
-Rule 18f-4 parametric VaR calculations, and SEC Rule 6c-11 IAV computations.
+Rule 18f-4 parametric VaR calculations, and SEC Rule 6c-11 INAV computations.
 """
 
 import pytest
@@ -21,7 +21,7 @@ import pandas as pd
 
 from tests import generate_synthetic_universe
 from src.quant_engine import QuantMatrixUtils
-from analytics.iav_calculator import IAVCalculator, OptionPositionState
+from analytics.inav_calculator import INAVCalculator, OptionPositionState
 
 
 def test_zscore_standardize():
@@ -61,9 +61,9 @@ def test_parametric_var():
     assert var_99 > 0.0
 
 
-def test_iav_calculator_intraday_valuation():
-    """Verify IAV calculation correctly aggregates spot equities, cash, and options liabilities."""
-    calculator = IAVCalculator(
+def test_inav_calculator_intraday_valuation():
+    """Verify INAV calculation correctly aggregates spot equities, cash, and options liabilities."""
+    calculator = INAVCalculator(
         total_shares_outstanding=1_000_000,
         creation_unit_size=25_000,
         dislocation_threshold_bps=20.0,
@@ -86,7 +86,7 @@ def test_iav_calculator_intraday_valuation():
 
     settled_cash = 500_000.0
 
-    snapshot = calculator.calculate_iav(
+    snapshot = calculator.calculate_inav(
         spot_positions=spot_positions,
         current_prices=current_prices,
         options_positions=option_positions,

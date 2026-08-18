@@ -8,7 +8,8 @@ anomaly detection, convex portfolio optimization, and derivatives pricing.
 from .institutional_graph_engine import InstitutionalGraphEngine
 from .anomaly_detector import AnomalyDetector
 from .convex_position_optimizer import ConvexPositionOptimizer
-from .iav_calculator import IAVCalculator, IAVSnapshot, OptionPositionState
+from .institutional_adoption_velocity import IAVInputs, IAVResult, InstitutionalAdoptionVelocity
+from .inav_calculator import INAVCalculator, INAVSnapshot, OptionPositionState
 from .options_modeler import (
     BlackScholesEngine,
     OptionContract,
@@ -23,8 +24,11 @@ __all__ = [
     "InstitutionalGraphEngine",
     "AnomalyDetector",
     "ConvexPositionOptimizer",
-    "IAVCalculator",
-    "IAVSnapshot",
+    "IAVInputs",
+    "IAVResult",
+    "InstitutionalAdoptionVelocity",
+    "INAVCalculator",
+    "INAVSnapshot",
     "OptionPositionState",
     "BlackScholesEngine",
     "OptionContract",
