@@ -33,9 +33,12 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 from api.bridge import HostBridge, UnknownProject
+from core.env import ensure_env_loaded
 from ui.state import UIEvent
 
 TOKEN_ENV = "EDGE_API_TOKEN"
+
+ensure_env_loaded()
 
 _bridge: HostBridge | None = None
 

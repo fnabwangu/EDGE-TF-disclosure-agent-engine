@@ -2,6 +2,12 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# Secrets. The template is tracked; the populated file never is.
+.env
+.env.*
+!.env.template
+
 data/audit_logs/*.json
 data/workbench/
 data/simulated/

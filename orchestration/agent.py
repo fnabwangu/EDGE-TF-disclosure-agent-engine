@@ -165,6 +165,7 @@ class ChatAgent:
         self.session_id = session_id
         self.user_id = user_id
         self.model = model or KeywordRouter()
+        self.fallback_router = KeywordRouter()
         self.history: List[ChatMessage] = []
         self.focus_strategy_id: Optional[str] = None
         self.catalyst_planner = CatalystPlanner(self.funnel.generator)
@@ -176,12 +177,20 @@ class ChatAgent:
 
     def send(self, message: str) -> AgentTurn:
         self.history.append(ChatMessage(role="user", content=message))
-        intent = self.model.route(
-            message, history=self.history, intents=self.INTENTS, context=self.state_context()
-        ) or Intent("help")
+        intent = self._route(message)
         turn = self.dispatch(intent)
         self.history.append(ChatMessage(role="assistant", content=turn.reply, view=turn.view))
         return turn
+
+    def _route(self, message: str) -> Intent:
+        """A model outage degrades to keyword routing, not to a help message."""
+        context = self.state_context()
+        intent = self.model.route(message, history=self.history, intents=self.INTENTS, context=context)
+        if intent is None and not isinstance(self.model, KeywordRouter):
+            intent = self.fallback_router.route(
+                message, history=self.history, intents=self.INTENTS, context=context
+            )
+        return intent or Intent("help")
 
     def project_state(self) -> ProjectStateSnapshot:
         """Authoritative state. The UI is never the source of truth; this is."""

@@ -27,6 +27,7 @@ from approvals.schemas import ApprovalState
 from approvals.service import ApprovalError
 from console.components.generative_view import render_component, render_view
 from console.demo.wiring import build_stack, seed
+from core.env import ensure_env_loaded
 from orchestration.agent import ChatAgent
 from orchestration.llm import build_language_model, model_status, resolve_config
 from orchestration.ui_composer import funnel_rail
@@ -36,6 +37,8 @@ from ui.registry import action_approval_panel, approval_panel, project_switcher,
 from ui.schemas import ActionType
 
 st.set_page_config(page_title="HedgeHog - EDGE-TF", layout="wide")
+
+ensure_env_loaded()
 
 OPENING = (
     "I work the funnel in order: **generate strategies**, **synthesize ETF disclosures**, "

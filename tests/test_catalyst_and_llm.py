@@ -164,3 +164,35 @@ def test_placeholder_api_keys_are_not_treated_as_configured(monkeypatch):
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-real")
     assert resolve_config().provider == "openai"
+
+
+class DeadModel:
+    """Stands in for a configured model that cannot be reached."""
+
+    def route(self, message, *, history, intents, context=""):
+        return None
+
+
+def test_a_model_outage_degrades_to_keyword_routing(tmp_path):
+    from datetime import date
+
+    from console.demo.wiring import build_stack
+    from orchestration.agent import ChatAgent
+    from research.funnel import ResearchFunnel
+
+    stack = build_stack(log_path=tmp_path / "events.jsonl")
+    stack.workbench.create_project(project_id="p1", name="Macro")
+    brief = stack.workbench.open_session(project_id="p1")
+    agent = ChatAgent(
+        funnel=ResearchFunnel(as_of=date(2026, 8, 18), storage_dir=tmp_path / "sim"),
+        workbench=stack.workbench,
+        transactions=stack.transactions,
+        approvals=stack.approvals,
+        project_id="p1",
+        session_id=brief.session_id,
+        user_id="op-1",
+        model=DeadModel(),
+    )
+
+    turn = agent.send("trade the FOMC")
+    assert "catalyst path" in turn.reply

@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from core.env import ensure_env_loaded
+
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -67,6 +69,8 @@ def _placeholder(value: Optional[str]) -> bool:
 
 
 def resolve_config() -> Optional[ModelConfig]:
+    ensure_env_loaded()
+
     openai_key = os.getenv("OPENAI_API_KEY")
     if not _placeholder(openai_key):
         return ModelConfig("openai", os.getenv("OPENAI_MODEL", "gpt-4o"), openai_key)
