@@ -53,6 +53,34 @@ class AllocationResult:
     reason_code: str
 
 
+# A solver reports success within its own tolerance. Permission to commit
+# capital must not depend on that tolerance, so the returned solution is
+# re-checked against the hard constraints before it is allowed to trade.
+# Measured CLARABEL overshoot on a binding variance budget is ~2e-6 relative.
+FEASIBILITY_RELATIVE_TOLERANCE = 1e-4
+WEIGHT_DUST_FLOOR = 1e-9
+
+
+def _verify_constraints(
+    weights: np.ndarray,
+    covariance: np.ndarray,
+    variance_budget: float,
+    max_single_position: float,
+) -> Optional[str]:
+    """Return the name of the first hard constraint the solution breaches."""
+    realized_variance = float(weights @ covariance @ weights)
+    # Purely relative: a zero budget admits only an exactly zero variance.
+    if realized_variance > variance_budget + abs(variance_budget) * FEASIBILITY_RELATIVE_TOLERANCE:
+        return "VARIANCE_BUDGET"
+    if weights.size and float(weights.max()) > max_single_position * (1 + FEASIBILITY_RELATIVE_TOLERANCE):
+        return "SINGLE_POSITION_CAP"
+    if float(weights.sum()) > 1.0 + FEASIBILITY_RELATIVE_TOLERANCE:
+        return "GROSS_EXPOSURE"
+    if weights.size and float(weights.min()) < -FEASIBILITY_RELATIVE_TOLERANCE:
+        return "LONG_ONLY"
+    return None
+
+
 class ConvexPositionOptimizer:
     """
     Executes quadratic convex optimization to synthesize multi-asset trade structures
@@ -117,6 +145,14 @@ class ConvexPositionOptimizer:
         if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) or weights.value is None:
             return AllocationResult(str(problem.status).upper(), zero_weights, False, "OPTIMIZATION_INFEASIBLE")
         solved_weights = np.asarray(weights.value, dtype=float).reshape(-1)
+        solved_weights = np.where(np.abs(solved_weights) < WEIGHT_DUST_FLOOR, 0.0, solved_weights)
+
+        breached = _verify_constraints(solved_weights, covariance, max_drawdown_limit, max_single_position)
+        if breached is not None:
+            return AllocationResult(
+                "INFEASIBLE", zero_weights, False, f"OPTIMIZATION_CONSTRAINT_VIOLATION_{breached}"
+            )
+
         permitted = bool(np.any(np.abs(solved_weights) > 1e-10))
         return AllocationResult(
             "OPTIMAL",
