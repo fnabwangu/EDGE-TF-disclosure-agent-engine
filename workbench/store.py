@@ -350,6 +350,7 @@ class WorkbenchStore:
             project_id=project_id,
             project_name=project.name if project else None,
             session_id=session_id,
+            revision=state.event_count,
             fields=fields,
             theses=[
                 {"thesis_id": t.thesis_id, "title": t.title, "state": t.state.value}

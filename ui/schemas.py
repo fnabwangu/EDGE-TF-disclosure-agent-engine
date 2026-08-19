@@ -102,6 +102,7 @@ class GenerativeView(BaseModel):
     state: Dict[str, UIFieldState] = Field(default_factory=dict)
     project_id: Optional[str] = None
     session_id: Optional[str] = None
+    project_revision: Optional[int] = None
     thesis_id: Optional[str] = None
     surface: Literal["WEB", "CHAT_APP", "API", "CONSOLE"] = "WEB"
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

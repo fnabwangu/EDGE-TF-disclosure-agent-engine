@@ -29,6 +29,7 @@ from transactions.service import TransactionService
 from ui.registry import approval_inbox, approval_panel, continuity_panel
 from ui.dependencies import DependencyMap, ViewProducer
 from ui.hydration import hydrate
+from ui.advance_gate import WorkflowState, WorkflowTransitionBlocked, ui_advance_gate
 from ui.schemas import ActionType, ComponentType, GenerativeView, UIComponent
 from ui.state import Persistence, ProjectStateSnapshot, UIEvent, UIEventType
 from workbench.schemas import EventKind, Evidence, IdeaState, Thesis, WatchCondition
@@ -245,14 +246,43 @@ class ChatAgent:
         return turn
 
     def dispatch(self, intent: Intent) -> AgentTurn:
+        previous_workflow_state = self._workflow_state()
         handler = getattr(self, f"_do_{intent.name}", None)
         if handler is None:
             return AgentTurn(reply=f"I do not have a handler for '{intent.name}'.")
         turn = handler(**intent.args) if intent.args else handler()
+        proposed_workflow_state = self._workflow_state()
+        snapshot = self.project_state()
         if turn.view is not None:
-            hydrate(turn.view, self.project_state())
+            hydrate(turn.view, snapshot)
+            turn.view.project_revision = snapshot.revision
+        gate = ui_advance_gate(
+            previous_state=previous_workflow_state,
+            proposed_state=proposed_workflow_state,
+            view=turn.view,
+            project_id=self.project_id,
+            project_revision=snapshot.revision if turn.view is not None else None,
+        )
+        if not gate.passed:
+            raise WorkflowTransitionBlocked(gate)
+        if turn.view is not None:
             self._track(turn.view, intent)
         return turn
+
+    def _workflow_state(self) -> WorkflowState:
+        strategy_id = self.focus_strategy_id or next(iter(self.funnel.positions), None)
+        position = self.funnel.positions.get(strategy_id) if strategy_id else None
+        if position is None:
+            return WorkflowState.NEW
+        if position.stage in {FunnelStage.STRATEGY_GENERATION}:
+            return WorkflowState.STRATEGY
+        if position.stage in {FunnelStage.DISCLOSURE_SYNTHESIS, FunnelStage.EVIDENCE_REVIEW}:
+            return WorkflowState.RESEARCH
+        if position.stage in {FunnelStage.IMPLEMENTATION_GENERATION, FunnelStage.IMPLEMENTATION_SELECTED}:
+            return WorkflowState.IMPLEMENTATION
+        if position.stage is FunnelStage.TRADE_DESIGN:
+            return WorkflowState.TRADE_PREVIEW
+        return WorkflowState.TRADE_PREVIEW
 
     def _track(self, view: GenerativeView, intent: Intent) -> None:
         """A view depends on the controls it draws plus the fields its handler read."""

@@ -123,6 +123,7 @@ class ProjectStateSnapshot(BaseModel):
     project_id: str
     project_name: Optional[str] = None
     session_id: Optional[str] = None
+    revision: int = 0
     phase: Optional[str] = None
     fields: Dict[str, UIFieldState] = Field(default_factory=dict)
     theses: List[Dict[str, Any]] = Field(default_factory=list)
