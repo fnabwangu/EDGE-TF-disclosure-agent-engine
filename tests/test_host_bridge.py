@@ -54,7 +54,13 @@ def test_the_surface_fails_closed_when_no_token_is_configured(bridge, monkeypatc
 def test_health_is_open_but_reveals_nothing(client, monkeypatch):
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    assert set(body) == {"status", "auth_configured"}
+    assert set(body) == {"status", "auth_configured", "openai_configured"}
+
+
+def test_health_never_contains_a_raw_key(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-must-not-appear-in-health")
+    response = client.get("/health")
+    assert "sk-must-not-appear-in-health" not in response.text
 
 
 # -- the round trip that was missing ---------------------------------------

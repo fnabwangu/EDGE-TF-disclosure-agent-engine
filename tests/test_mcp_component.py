@@ -225,3 +225,11 @@ def test_batched_requests_are_supported(client):
 def test_the_rpc_surface_exposes_no_execution_tool(rpc):
     names = {tool["name"] for tool in call(rpc, "tools/list")["result"]["tools"]}
     assert not {n for n in names if re.search(r"approve|execute|submit|kill", n)}
+
+
+def test_the_rpc_surface_never_exposes_the_openai_key(rpc, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-must-not-leak-over-mcp")
+    tools = json.dumps(call(rpc, "tools/list")["result"])
+    resources = json.dumps(call(rpc, "resources/list")["result"])
+    assert "sk-must-not-leak-over-mcp" not in tools
+    assert "sk-must-not-leak-over-mcp" not in resources

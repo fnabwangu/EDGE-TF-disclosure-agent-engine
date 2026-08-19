@@ -92,7 +92,15 @@ def guarded(handler: Callable[[Request], Any]) -> Callable[[Request], Any]:
 
 
 async def health(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "ok", "auth_configured": bool(os.getenv(TOKEN_ENV, ""))})
+    from orchestration.llm import openai_configured
+
+    return JSONResponse(
+        {
+            "status": "ok",
+            "auth_configured": bool(os.getenv(TOKEN_ENV, "")),
+            "openai_configured": openai_configured(),
+        }
+    )
 
 
 @guarded

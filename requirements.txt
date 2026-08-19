@@ -10,3 +10,4 @@ streamlit>=1.24
 requests>=2.30
 starlette>=0.37
 uvicorn>=0.29
+openai>=1.50

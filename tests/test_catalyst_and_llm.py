@@ -105,6 +105,9 @@ def test_expiration_floor_clears_catalyst_plus_buffer(planner):
 
 
 # -- language model seam ---------------------------------------------------
+# Exercises shared parsing/validation logic (JSON extraction, fence stripping,
+# intent validation) via the Anthropic path, which still runs on `requests`.
+# The OpenAI-specific Responses API path is covered in tests/test_openai_sdk.py.
 
 
 class FakeResponse:
@@ -125,12 +128,12 @@ class FakeSession:
 
     def post(self, url, **kwargs):
         self.calls.append((url, kwargs))
-        return FakeResponse({"choices": [{"message": {"content": self.content}}]})
+        return FakeResponse({"content": [{"text": self.content}]})
 
 
 def _model(content: str) -> HostedLanguageModel:
     session = FakeSession(content)
-    model = HostedLanguageModel(ModelConfig("openai", "gpt-4o", "sk-test"), session=session)
+    model = HostedLanguageModel(ModelConfig("anthropic", "claude-3-5-sonnet-20241022", "sk-test"), session=session)
     return model
 
 
