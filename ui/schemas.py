@@ -41,6 +41,8 @@ class ComponentType(str, Enum):
     PROJECT_SWITCHER = "project_switcher"
     PROJECT_CARD = "project_card"
     CONTINUITY_BRIEF = "continuity_brief"
+    FUNNEL_RAIL = "funnel_rail"
+    STRATEGY_CANDIDATES = "strategy_candidates"
     AUDIT_TRAIL = "audit_trail"
     THESIS_TIMELINE = "thesis_timeline"
     STATE_DIFF = "state_diff"
@@ -62,6 +64,8 @@ class ActionType(str, Enum):
     CANCEL_ACTION = "cancel_action"
     SWITCH_PROJECT = "switch_project"
     RESUME_THREAD = "resume_thread"
+    SYNTHESIZE_DISCLOSURES = "synthesize_disclosures"
+    OPEN_THESIS = "open_thesis"
 
 
 class UIAction(BaseModel):

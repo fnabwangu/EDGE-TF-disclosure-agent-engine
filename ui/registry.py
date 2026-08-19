@@ -42,7 +42,9 @@ REGISTRY: Dict[ComponentType, ComponentSpec] = {
     ComponentType.TABLE: ComponentSpec({"columns", "rows"}, {ActionType.DRILL_DOWN, ActionType.PIN_TO_WORKBENCH}),
     ComponentType.CHART: ComponentSpec({"series"}, {ActionType.DRILL_DOWN}),
     ComponentType.SIGNAL_CARD: ComponentSpec(
-        {"ticker", "state"}, {ActionType.DRILL_DOWN, ActionType.DRAFT_INTENT, ActionType.PIN_TO_WORKBENCH}, True
+        {"ticker", "state"},
+        {ActionType.DRILL_DOWN, ActionType.DRAFT_INTENT, ActionType.PIN_TO_WORKBENCH, ActionType.OPEN_THESIS},
+        True,
     ),
     ComponentType.EVIDENCE_CARD: ComponentSpec({"claim", "sources"}, {ActionType.OPEN_EVIDENCE}, True),
     ComponentType.COUNTER_THESIS_PANEL: ComponentSpec({"counter_claims"}, {ActionType.OPEN_EVIDENCE}, True),
@@ -92,6 +94,12 @@ REGISTRY: Dict[ComponentType, ComponentSpec] = {
     ComponentType.CONTINUITY_BRIEF: ComponentSpec(
         {"project_id", "session_id", "active_theses"},
         {ActionType.RESUME_THREAD, ActionType.DRILL_DOWN, ActionType.SWITCH_PROJECT},
+    ),
+    ComponentType.FUNNEL_RAIL: ComponentSpec({"stages"}, {ActionType.DRILL_DOWN}),
+    ComponentType.STRATEGY_CANDIDATES: ComponentSpec(
+        {"columns", "rows"},
+        {ActionType.SYNTHESIZE_DISCLOSURES, ActionType.DRILL_DOWN, ActionType.PIN_TO_WORKBENCH},
+        requires_provenance=True,
     ),
     ComponentType.AUDIT_TRAIL: ComponentSpec({"entries"}, set(), True),
     ComponentType.THESIS_TIMELINE: ComponentSpec({"events"}, {ActionType.OPEN_EVIDENCE, ActionType.DRILL_DOWN}, True),
