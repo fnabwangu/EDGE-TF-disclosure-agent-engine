@@ -1,0 +1,276 @@
+"""
+Learning Engine policy configuration.
+
+Path: config/learning_policy.json
+
+Governance configuration for the Learning Engine:
+- Data quality gate thresholds
+- Model evaluation gate thresholds
+- Champion/challenger promotion policy
+- Model performance requirements
+- Risk limits for predictions
+
+All policy changes require approval and create audit records.
+"""
+
+{
+  "metadata": {
+    "version": "1.0",
+    "effective_date": "2026-08-19",
+    "owner": "risk_committee",
+    "notes": "Initial policy configuration for Learning Engine governance"
+  },
+  "data_quality_gates": {
+    "description": "Deterministic validation gates for all incoming data",
+    "trusted_sources": [
+      "EDGE_RESEARCH",
+      "SEC_EDGAR",
+      "MARKET_DATA_FEED",
+      "INTERNAL_ANALYTICS",
+      "BROKER_API"
+    ],
+    "schema_validation": {
+      "enabled": true,
+      "required_fields": [
+        "observation_id",
+        "timestamp",
+        "features"
+      ]
+    },
+    "timestamp_validation": {
+      "enabled": true,
+      "max_lookahead_days": 0,
+      "tolerance_seconds": 300
+    },
+    "outlier_detection": {
+      "enabled": true,
+      "std_threshold": 3.0,
+      "method": "z_score"
+    },
+    "missing_value_tolerance": {
+      "enabled": true,
+      "max_ratio": 0.2
+    },
+    "duplicate_detection": {
+      "enabled": true
+    }
+  },
+  "model_training_policy": {
+    "description": "Policy governing model training and dataset construction",
+    "walk_forward_validation": {
+      "enabled": true,
+      "required": true,
+      "training_window_years": 5,
+      "test_window_days": 60,
+      "step_days": 30,
+      "min_oos_samples": 50
+    },
+    "minimum_training_samples": 100,
+    "feature_count_bounds": {
+      "min": 3,
+      "max": 100
+    },
+    "model_types": {
+      "return": {
+        "enabled": true,
+        "algorithm": "linear_regression",
+        "description": "Predicts expected return from setup features"
+      },
+      "drawdown": {
+        "enabled": true,
+        "algorithm": "linear_regression",
+        "description": "Predicts maximum drawdown risk"
+      },
+      "thesis_success": {
+        "enabled": true,
+        "algorithm": "logistic_regression",
+        "description": "Probability thesis will be validated"
+      },
+      "hedge_effectiveness": {
+        "enabled": true,
+        "algorithm": "linear_regression",
+        "description": "Expected hedge effectiveness"
+      }
+    }
+  },
+  "evaluation_gates": {
+    "description": "Deterministic gates models must pass for promotion",
+    "oos_performance_gate": {
+      "enabled": true,
+      "required": true,
+      "min_sharpe": 0.3,
+      "min_oos_samples": 50,
+      "positive_return_required": false
+    },
+    "calibration_gate": {
+      "enabled": true,
+      "required": true,
+      "max_calibration_error": 0.15,
+      "description": "Predicted probabilities must match realized outcomes"
+    },
+    "risk_bounds_gate": {
+      "enabled": true,
+      "required": true,
+      "max_drawdown": 0.20,
+      "description": "Model predictions must respect risk limits"
+    },
+    "regression_gate": {
+      "enabled": true,
+      "required": false,
+      "regression_tolerance": 0.10,
+      "description": "Candidate must not degrade more than 10% vs champion"
+    },
+    "drift_detection_gate": {
+      "enabled": true,
+      "required": false,
+      "drift_threshold": 0.20,
+      "method": "z_score_on_features",
+      "description": "Data distribution must not shift from training"
+    },
+    "regression_test_suite": {
+      "enabled": true,
+      "required": false,
+      "tolerance": 0.05,
+      "description": "Model must pass canonical regression test cases"
+    }
+  },
+  "promotion_policy": {
+    "description": "Policy for champion/challenger versioning and promotion",
+    "status_types": ["draft", "challenger", "champion", "retired"],
+    "champion_model_required": false,
+    "promotion_requirements": {
+      "all_gates_must_pass": true,
+      "human_approval_required": true,
+      "approval_roles": ["risk_committee", "model_governance"],
+      "shadow_deployment_required": true,
+      "shadow_deployment_min_days": 14,
+      "shadow_deployment_min_observations": 20
+    },
+    "challenger_policy": {
+      "max_concurrent_challengers": 2,
+      "max_days_in_shadow": 90,
+      "auto_retirement_on_failure": true
+    },
+    "promotion_decision_options": ["promote", "demote", "hold"],
+    "automatic_demotion": {
+      "enabled": false,
+      "trigger_condition": "out_of_sample_sharpe < 0.2"
+    }
+  },
+  "model_performance_monitoring": {
+    "description": "Monitoring and alerting on model performance",
+    "shadow_deployment_tracking": {
+      "enabled": true,
+      "track_predictions": true,
+      "track_errors": true,
+      "track_drift": true
+    },
+    "drift_alerts": {
+      "enabled": true,
+      "alert_on_max_z_score": 3.0,
+      "alert_actions": ["log", "notify_risk_committee"]
+    },
+    "performance_degradation": {
+      "enabled": true,
+      "alert_sharpe_drop": 0.20,
+      "alert_rmse_increase": 0.15
+    }
+  },
+  "historical_analog_engine": {
+    "description": "Policy for historical analog retrieval",
+    "enabled": true,
+    "minimum_similarity_threshold": 0.50,
+    "top_k_events": 5,
+    "top_k_trades": 5,
+    "confidence_levels": ["high", "medium", "low", "no_analog"],
+    "similarity_components": {
+      "event_type": 0.30,
+      "region": 0.10,
+      "commodity": 0.10,
+      "supply_impact": 0.15,
+      "shipping_impact": 0.10,
+      "policy_mechanism": 0.10,
+      "market_regime": 0.05,
+      "volatility_regime": 0.05,
+      "macro_backdrop": 0.05
+    }
+  },
+  "outcome_labeling": {
+    "description": "Multi-dimensional outcome assessment and labeling",
+    "dimensions": [
+      "thesis_correctness",
+      "instrument_correctness",
+      "timing_correctness",
+      "hedge_effectiveness",
+      "sizing_appropriateness"
+    ],
+    "label_types": [
+      "return",
+      "drawdown",
+      "thesis_success",
+      "hedge_effectiveness"
+    ],
+    "minimum_horizon_days": 5,
+    "require_human_validation": false
+  },
+  "decision_record_policy": {
+    "description": "Audit trail policy for learning activities",
+    "record_model_training": true,
+    "record_model_evaluation": true,
+    "record_model_promotion": true,
+    "record_data_ingestion": false,
+    "retention_days": 2555,
+    "immutable": true
+  },
+  "model_behavior_constraints": {
+    "description": "Hard constraints on what models can do",
+    "can_predict_probabilities": true,
+    "can_rank_implementations": true,
+    "can_suggest_position_sizing": true,
+    "can_inform_thesis_scoring": true,
+    "cannot_override_risk_limits": true,
+    "cannot_bypass_approval_gates": true,
+    "cannot_modify_kill_switches": true,
+    "cannot_change_position_limits": true,
+    "cannot_modify_execution_routing": true,
+    "enforced_at_layer": "orchestration"
+  },
+  "performance_requirements": {
+    "description": "Target performance levels for models",
+    "return_model": {
+      "target_sharpe": 0.8,
+      "target_r_squared": 0.35,
+      "target_mape": 0.25
+    },
+    "drawdown_model": {
+      "target_r_squared": 0.40,
+      "target_mape": 0.20
+    },
+    "thesis_success_model": {
+      "target_auc_roc": 0.70,
+      "target_calibration_error": 0.10
+    },
+    "hedge_effectiveness_model": {
+      "target_r_squared": 0.45,
+      "target_mape": 0.15
+    }
+  },
+  "change_control": {
+    "description": "Policy for changing Learning Engine configuration",
+    "requires_approval": true,
+    "approval_required_by": ["cto", "cro"],
+    "approval_required_for": [
+      "gate_thresholds",
+      "model_training_policy",
+      "promotion_policy",
+      "model_behavior_constraints",
+      "trusted_data_sources"
+    ],
+    "changes_not_requiring_approval": [
+      "monitoring_parameters",
+      "alert_thresholds",
+      "cosmetic_changes"
+    ],
+    "create_audit_record_on_change": true
+  }
+}
