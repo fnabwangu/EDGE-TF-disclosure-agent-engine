@@ -288,7 +288,15 @@ class WorkbenchStore:
         return WorkspaceBrief(projects=digests, total_pending_approvals=total_pending)
 
     def record_ui_event(self, event: UIEvent) -> UIFieldState | None:
-        """Persist an interaction. Field changes become authoritative project state."""
+        """Persist an interaction. Field changes become authoritative project state.
+
+        Idempotent on `event_id`: a retried delivery from a remote host must not
+        append a second revision.
+        """
+        projected = self.projection(project_id=event.project_id)
+        if event.event_id in projected.ui_event_ids:
+            return projected.field_states.get(event.field_id or "")
+
         if event.event_type is UIEventType.FIELD_CHANGED and event.field_id:
             self.append(
                 EventKind.UI_FIELD_CHANGED,
@@ -297,6 +305,7 @@ class WorkbenchStore:
                 actor=event.actor,
                 subject_id=event.view_id,
                 payload={
+                    "event_id": event.event_id,
                     "field_id": event.field_id,
                     "value": event.value,
                     "persistence": event.persistence.value,
@@ -312,6 +321,7 @@ class WorkbenchStore:
             actor=event.actor,
             subject_id=event.view_id,
             payload={
+                "event_id": event.event_id,
                 "event_type": event.event_type.value,
                 "action": event.action,
                 "field_id": event.field_id,
@@ -523,6 +533,8 @@ def _apply(state: WorkbenchState, event: WorkbenchEvent) -> None:
         state.intent_states[payload["intent_id"]] = payload["state"]
 
     elif kind is EventKind.UI_FIELD_CHANGED:
+        if payload.get("event_id"):
+            state.ui_event_ids.append(payload["event_id"])
         field_id = payload["field_id"]
         previous = state.field_states.get(field_id)
         state.field_states[field_id] = UIFieldState(
@@ -548,6 +560,10 @@ def _apply(state: WorkbenchState, event: WorkbenchEvent) -> None:
         record = state.action_states.setdefault(payload["request_id"], {"request_id": payload["request_id"]})
         record["state"] = payload["state"]
 
+    elif kind is EventKind.UI_INTERACTION:
+        if payload.get("event_id"):
+            state.ui_event_ids.append(payload["event_id"])
+
     elif kind is EventKind.VIEW_PINNED:
         pin = PinnedView.model_validate(payload)
         pin.pinned_in_session = event.session_id
@@ -555,7 +571,6 @@ def _apply(state: WorkbenchState, event: WorkbenchEvent) -> None:
 
     elif kind is EventKind.NOTE_ADDED:
         state.notes.append({**payload, "session_id": event.session_id, "at": event.at.isoformat()})
-
 
 def _require_project(state: WorkbenchState, event: WorkbenchEvent) -> Project:
     project = state.projects.get(event.subject_id or "")
