@@ -190,6 +190,7 @@ async def widget(request: Request) -> HTMLResponse:
 routes = [
     Route("/health", health, methods=["GET"]),
     Route("/widget/edge-panel.html", widget, methods=["GET"]),
+    Route("/widget/index.html", widget, methods=["GET"]),
     Route("/mcp", mcp_rpc, methods=["POST"]),
     Route("/projects", projects, methods=["GET", "POST"]),
     Route("/projects/{project_id}/state", project_state, methods=["GET"]),

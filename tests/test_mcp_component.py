@@ -99,6 +99,9 @@ def test_the_widget_is_served_as_an_mcp_resource(rpc):
     contents = call(rpc, "resources/read", {"uri": WIDGET_URI})["result"]["contents"][0]
     assert contents["mimeType"] == WIDGET_MIME
     assert "<script>" in contents["text"]
+    assert "function fieldValue" in contents["text"]
+    assert "component.actions" in contents["text"]
+    assert "edge_component_action" in contents["text"]
 
 
 def test_reading_an_unknown_resource_fails_cleanly(rpc):
@@ -127,6 +130,9 @@ def test_the_component_is_served_over_http(client):
     response = client.get("/widget/edge-panel.html")
     assert response.status_code == 200
     assert "edge_record_ui_event" in response.text
+    canonical = client.get("/widget/index.html")
+    assert canonical.status_code == 200
+    assert "EDGE" in canonical.text
 
 
 # -- round trip through the RPC surface ------------------------------------

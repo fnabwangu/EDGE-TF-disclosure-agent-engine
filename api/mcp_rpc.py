@@ -24,9 +24,9 @@ from typing import Any, Dict, List, Optional
 from api.mcp import TOOL_DESCRIPTORS, MCPToolServer
 
 PROTOCOL_VERSION = "2025-06-18"
-WIDGET_URI = "ui://widget/edge-panel.html"
+WIDGET_URI = "ui://edge/index.html"
 WIDGET_MIME = "text/html+skybridge"
-WIDGET_PATH = Path(__file__).resolve().parent.parent / "web" / "edge_panel.html"
+WIDGET_PATH = Path(__file__).resolve().parent.parent / "web" / "index.html"
 
 # Tools whose result should render as the interactive panel rather than text.
 WIDGET_TOOLS = {"edge_send_message", "edge_get_view", "edge_record_ui_event", "edge_component_action", "edge_create_project"}
@@ -114,9 +114,15 @@ class MCPJsonRpcServer:
             "resources": [
                 {
                     "uri": WIDGET_URI,
-                    "name": "EDGE panel",
+                    "name": "EDGE strategy workspace",
                     "description": "Renders an EDGE generative view and writes interactions back.",
                     "mimeType": WIDGET_MIME,
+                    "_meta": {
+                        "openai/widgetCSP": {
+                            "connect_domains": [],
+                            "resource_domains": [],
+                        }
+                    },
                 }
             ]
         }

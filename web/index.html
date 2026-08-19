@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EDGE-TF</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; margin: 0; padding: 12px; }
+.panel { border: 1px solid rgba(128,128,128,.32); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.field { margin: 8px 0; }
+.field label { display: block; font-size: 12px; margin-bottom: 3px; }
+.field input, .field select { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid rgba(128,128,128,.42); border-radius: 5px; background: transparent; color: inherit; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+button { padding: 6px 10px; border: 1px solid rgba(128,128,128,.42); border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }
+.muted { opacity: .68; font-size: 12px; }
+.metric { min-width: 110px; }
+.metric strong { display: block; font-size: 20px; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(128,128,128,.22); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let payload = (window.openai && window.openai.toolOutput) || window.__EDGE_FIXTURE__ || null;
+
+const Host = {
+  available() { return !!(window.openai && typeof window.openai.callTool === "function"); },
+  async callTool(name, args) {
+    if (Host.available()) return window.openai.callTool(name, args);
+    const api = window.__EDGE_API__ || {};
+    const routes = {
+      edge_record_ui_event: [`/projects/${args.project_id}/events`, "POST"],
+      edge_component_action: [`/projects/${args.project_id}/actions`, "POST"]
+    };
+    const route = routes[name];
+    if (!api.base || !route) throw new Error("EDGE host transport is unavailable");
+    const response = await fetch(api.base + route[0], {
+      method: route[1],
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${api.token || ""}` },
+      body: JSON.stringify(args)
+    });
+    if (!response.ok) throw new Error(`${name} failed: ${response.status}`);
+    return response.json();
+  }
+};
+
+function currentView() {
+  if (!payload) return null;
+  if (payload.view) return payload.view;
+  const refreshed = payload.refreshed || [];
+  return refreshed.length ? refreshed[refreshed.length - 1].view : null;
+}
+function projectId() {
+  const view = currentView();
+  return (payload && payload.project_id) || (payload && payload.state && payload.state.project_id) || (view && view.project_id) || "";
+}
+function fieldValue(view, fieldId) {
+  const state = (view.state || {})[fieldId];
+  return state && state.value !== null && state.value !== undefined ? state.value : "";
+}
+function adoptResult(result) {
+  const next = result && result.structuredContent ? result.structuredContent : result;
+  if (!next) return;
+  payload = { ...(payload || {}), ...next };
+  if (!next.view && next.refreshed && next.refreshed.length) payload.view = next.refreshed[next.refreshed.length - 1].view;
+}
+function node(tag, attrs, children) {
+  const item = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => key === "text" ? item.textContent = value : item.setAttribute(key, value));
+  (children || []).forEach(child => item.appendChild(child));
+  return item;
+}
+async function fieldChanged(view, spec, value, status) {
+  status.textContent = "saving...";
+  try {
+    const result = await Host.callTool("edge_record_ui_event", {
+      project_id: projectId(), view_id: view.view_id, event_type: "FIELD_CHANGED",
+      field_id: spec.field_id, value: value === "" ? null : value,
+      persistence: spec.persistence || "PROJECT", event_id: `${view.view_id}:${spec.field_id}:${Date.now()}`
+    });
+    adoptResult(result); render();
+  } catch (error) { status.textContent = `not saved: ${error.message}`; }
+}
+async function actionClicked(view, action, status) {
+  status.textContent = "working...";
+  try {
+    const result = await Host.callTool("edge_component_action", {
+      project_id: projectId(), view_id: view.view_id, type: action.type, payload: action.payload || {}
+    });
+    adoptResult(result); render();
+  } catch (error) { status.textContent = `not completed: ${error.message}`; }
+}
+function renderField(view, spec) {
+  const status = node("div", { class: "muted" });
+  const label = node("label", { text: spec.label });
+  let input;
+  if (spec.kind === "CHOICE") {
+    input = node("select", {});
+    (spec.options || []).forEach(option => input.appendChild(node("option", { value: option, text: option })));
+  } else {
+    input = node("input", { type: spec.kind === "DATE" ? "date" : spec.kind === "NUMBER" ? "number" : "text" });
+  }
+  input.value = fieldValue(view, spec.field_id);
+  input.addEventListener("change", event => fieldChanged(view, spec, event.target.value, status));
+  return node("div", { class: "field" }, [label, input, status]);
+}
+function renderRows(rows) {
+  if (!rows || !rows.length) return node("div", { class: "muted", text: "No rows." });
+  const columns = Object.keys(rows[0]);
+  return node("table", {}, [
+    node("thead", {}, [node("tr", {}, columns.map(column => node("th", { text: column })))]),
+    node("tbody", {}, rows.slice(0, 20).map(row => node("tr", {}, columns.map(column => node("td", { text: String(row[column] ?? "") })))))]
+  );
+}
+function renderBody(component) {
+  const data = component.data || {};
+  if (data.rows || data.candidates) return renderRows(data.rows || data.candidates);
+  if (data.value !== undefined) return node("div", { class: "metric" }, [node("strong", { text: String(data.value) })]);
+  if (data.claim) return node("div", { text: data.claim });
+  if (data.counter_claims) return node("ul", {}, data.counter_claims.map(item => node("li", { text: item.claim || String(item) })));
+  return node("div", { class: "muted", text: component.type });
+}
+function renderComponent(view, component) {
+  const panel = node("section", { class: "panel" }, [node("h3", { text: component.title }), renderBody(component)]);
+  (component.fields || []).forEach(spec => panel.appendChild(renderField(view, spec)));
+  if (component.actions && component.actions.length) {
+    const status = node("div", { class: "muted" });
+    const buttons = node("div", { class: "actions" });
+    component.actions.forEach(action => {
+      const button = node("button", { type: "button", text: action.label });
+      button.addEventListener("click", () => actionClicked(view, action, status));
+      buttons.appendChild(button);
+    });
+    panel.append(buttons, status);
+  }
+  return panel;
+}
+function render() {
+  root.replaceChildren();
+  const view = currentView();
+  if (!view) { root.appendChild(node("div", { class: "muted", text: "Waiting for an EDGE view." })); return; }
+  root.appendChild(node("h2", { text: view.title }));
+  if (view.summary) root.appendChild(node("div", { class: "muted", text: view.summary }));
+  (view.components || []).forEach(component => root.appendChild(renderComponent(view, component)));
+}
+render();
+if (Host.available() && typeof window.openai.setWidgetState === "function") window.openai.setWidgetState({ rendered_view_id: (currentView() || {}).view_id || null });
+</script>
+</body>
+</html>

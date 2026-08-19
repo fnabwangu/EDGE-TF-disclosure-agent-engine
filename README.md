@@ -34,7 +34,8 @@ CONTENT SECTIONS:
 
 EDGE's remote MCP service is `api.app:app`. It binds to all interfaces and uses
 `PORT` (default `8600`). The MCP endpoint is `/mcp`; the unauthenticated health
-endpoint is `/health`.
+endpoint is `/health`. The Apps SDK UI resource is `ui://edge/index.html`,
+backed by the self-contained `web/index.html` renderer.
 
 ### GitHub Codespaces
 
