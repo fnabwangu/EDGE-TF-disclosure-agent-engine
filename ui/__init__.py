@@ -1,0 +1,1 @@
+"""Declarative generative UI contracts."""
