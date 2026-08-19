@@ -19,6 +19,49 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Preferred order: CLARABEL first (fastest, most reliable for this problem
+# shape), then SCS, then OSQP where applicable. At least one must be present.
+APPROVED_SOLVERS: Tuple[str, ...] = ("CLARABEL", "SCS", "OSQP")
+
+
+@dataclass(frozen=True)
+class SolverDiagnostics:
+    """Startup check: is the convex solver stack actually usable, not just importable?"""
+
+    cvxpy_available: bool
+    cvxpy_version: Optional[str]
+    installed_solvers: Tuple[str, ...]
+    approved_available: Tuple[str, ...]
+    preferred_solver: Optional[str]
+
+    @property
+    def ok(self) -> bool:
+        return self.cvxpy_available and bool(self.approved_available)
+
+    def describe(self) -> str:
+        if not self.cvxpy_available:
+            return "cvxpy is not installed - convex optimization is unavailable, trades will fail closed."
+        if not self.approved_available:
+            return (
+                f"cvxpy {self.cvxpy_version} is installed but none of {APPROVED_SOLVERS} are available "
+                f"(found: {list(self.installed_solvers)}) - trades will fail closed."
+            )
+        return f"cvxpy {self.cvxpy_version} ready, solver stack: {list(self.approved_available)}"
+
+
+def diagnose_solver_stack() -> SolverDiagnostics:
+    """Never raises. Called at startup and before every optimization attempt."""
+    if cp is None:
+        return SolverDiagnostics(False, None, (), (), None)
+    try:
+        installed = tuple(cp.installed_solvers())
+    except Exception:  # a broken cvxpy install must not crash the caller
+        return SolverDiagnostics(True, getattr(cp, "__version__", None), (), (), None)
+    approved = tuple(s for s in APPROVED_SOLVERS if s in installed)
+    return SolverDiagnostics(
+        True, getattr(cp, "__version__", None), installed, approved, approved[0] if approved else None
+    )
+
 
 @dataclass
 class OptimizerParameters:
@@ -116,6 +159,10 @@ class ConvexPositionOptimizer:
         returns = np.asarray(expected_returns, dtype=float).reshape(-1)
         zero_weights = np.zeros(returns.size, dtype=float)
         if cp is None:
+            return AllocationResult("SOLVER_UNAVAILABLE", zero_weights, False, "OPTIMIZATION_SOLVER_UNAVAILABLE")
+        diagnostics = diagnose_solver_stack()
+        if not diagnostics.approved_available:
+            logger.error("Convex solver stack unavailable: %s", diagnostics.describe())
             return AllocationResult("SOLVER_UNAVAILABLE", zero_weights, False, "OPTIMIZATION_SOLVER_UNAVAILABLE")
         covariance = np.asarray(covariance_matrix, dtype=float)
         if returns.size == 0 or covariance.shape != (returns.size, returns.size):

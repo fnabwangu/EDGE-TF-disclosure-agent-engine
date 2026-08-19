@@ -11,6 +11,28 @@ from analytics.convex_position_optimizer import (
 COV = np.array([[1.0]])
 
 
+def test_a_missing_solver_stack_fails_closed_without_fabricating_weights(monkeypatch):
+    """No approved solver -> SOLVER_UNAVAILABLE, not a heuristic fallback."""
+    import analytics.convex_position_optimizer as module
+
+    class NoSolversDiagnostics:
+        approved_available = ()
+        installed_solvers = ()
+
+        def describe(self):
+            return "no approved solver"
+
+    monkeypatch.setattr(module, "diagnose_solver_stack", lambda: NoSolversDiagnostics())
+
+    result = ConvexPositionOptimizer.optimize_allocation_result(
+        expected_returns=np.array([0.12, 0.08]), covariance_matrix=np.diag([0.04, 0.03])
+    )
+    assert result.status == "SOLVER_UNAVAILABLE"
+    assert result.trade_permitted is False
+    assert result.reason_code == "OPTIMIZATION_SOLVER_UNAVAILABLE"
+    assert np.all(result.weights == 0.0)
+
+
 def test_zero_variance_budget_admits_only_a_zero_allocation():
     result = ConvexPositionOptimizer.optimize_allocation_result(
         expected_returns=np.array([0.1]), covariance_matrix=COV, max_drawdown_limit=0.0
