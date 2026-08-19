@@ -18,7 +18,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Literal, Optional, Protocol
+from typing import Any, Dict, FrozenSet, List, Literal, Optional, Protocol
 from approvals.service import ApprovalService
 from orchestration import ui_composer as compose
 from research.catalyst import CatalystPlanner, CatalystStrategy
@@ -27,6 +27,7 @@ from research.lexicon import Stance, TradeKind, expand
 from transactions.schemas import TradeIntent
 from transactions.service import TransactionService
 from ui.registry import approval_inbox, approval_panel, continuity_panel
+from ui.dependencies import DependencyMap, ViewProducer
 from ui.hydration import hydrate
 from ui.schemas import ActionType, ComponentType, GenerativeView, UIComponent
 from ui.state import Persistence, ProjectStateSnapshot, UIEvent, UIEventType
@@ -36,6 +37,20 @@ from workbench.store import WorkbenchStore
 BASE_ALLOCATION = 0.02
 DEFAULT_MAX_LOSS_PCT = 0.15
 CATALYST_BUFFER_DAYS = 14
+
+# Fields a handler reads without necessarily rendering a control for them.
+IMPLICIT_DEPENDENCIES: Dict[str, FrozenSet[str]] = {
+    "catalyst": frozenset(
+        {"catalyst_date", "secondary_catalyst_date", "execution_buffer_days", "stance"}
+    ),
+    "design_trade": frozenset(
+        {"max_loss", "invalidation_condition", "execution_buffer_days", "base_allocation"}
+    ),
+    "open_thesis": frozenset({"invalidation_condition"}),
+    "inbox": frozenset(),
+    "continuity": frozenset(),
+    "board": frozenset(),
+}
 
 
 def _as_date(value: Any) -> Optional[date]:
@@ -68,6 +83,14 @@ class AgentTurn:
     reply: str
     view: Optional[GenerativeView] = None
     tool_calls: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ViewRefresh:
+    """A stale view and the turn that supersedes it, so the UI can swap in place."""
+
+    replaced_view_id: str
+    turn: AgentTurn
 
 
 class LanguageModel(Protocol):
@@ -144,6 +167,7 @@ class ChatAgent:
         self.catalyst_planner = CatalystPlanner(self.funnel.generator)
         self.catalysts: Dict[str, CatalystStrategy] = {}
         self.focus_concept = None
+        self.dependencies = DependencyMap()
 
     # -- entry points ------------------------------------------------------
 
@@ -163,15 +187,22 @@ class ChatAgent:
     def state_context(self) -> str:
         return self.project_state().as_context()
 
-    def record_ui_event(self, event: UIEvent) -> Optional[AgentTurn]:
-        """Persist an interaction, then let the affected view regenerate from state."""
+    def record_ui_event(self, event: UIEvent) -> List[ViewRefresh]:
+        """Persist an interaction, then regenerate every live view it invalidates."""
         self.workbench.record_ui_event(event)
-        if event.event_type is not UIEventType.FIELD_CHANGED:
-            return None
-        if event.field_id in {"catalyst_date", "secondary_catalyst_date", "execution_buffer_days", "stance"}:
-            if self.focus_concept is not None:
-                return self._do_catalyst(query="", stance=self.project_state().value("stance"))
-        return None
+        if event.event_type is not UIEventType.FIELD_CHANGED or not event.field_id:
+            return []
+        return self.refresh_for(event.field_id)
+
+    def refresh_for(self, field_id: str) -> List[ViewRefresh]:
+        refreshes: List[ViewRefresh] = []
+        for view_id, producer in self.dependencies.affected_by(field_id):
+            turn = self.dispatch(Intent(name=producer.intent_name, args=dict(producer.intent_args)))
+            if turn.view is None:
+                continue
+            self.dependencies.forget(view_id)
+            refreshes.append(ViewRefresh(replaced_view_id=view_id, turn=turn))
+        return refreshes
 
     def act(self, action: Dict[str, Any]) -> Optional[AgentTurn]:
         """A button click is a pre-parsed intent; it runs the same handlers."""
@@ -195,7 +226,22 @@ class ChatAgent:
         turn = handler(**intent.args) if intent.args else handler()
         if turn.view is not None:
             hydrate(turn.view, self.project_state())
+            self._track(turn.view, intent)
         return turn
+
+    def _track(self, view: GenerativeView, intent: Intent) -> None:
+        """A view depends on the controls it draws plus the fields its handler read."""
+        declared = {spec.field_id for spec in view.declared_fields()}
+        implicit = IMPLICIT_DEPENDENCIES.get(intent.name, frozenset())
+        self.dependencies.register(
+            view.view_id,
+            ViewProducer(
+                name=intent.name,
+                intent_name=intent.name,
+                intent_args=dict(intent.args),
+                depends_on=frozenset(declared) | implicit,
+            ),
+        )
 
     # -- handlers ----------------------------------------------------------
 
@@ -476,7 +522,13 @@ class ChatAgent:
 
         nav = self.transactions.portfolio.snapshot().nav
         leverage = float(security.conviction.requested_leverage)
-        notional = nav * BASE_ALLOCATION * leverage
+        snapshot = self.project_state()
+        allocation = float(snapshot.value("base_allocation") or BASE_ALLOCATION)
+        notional = nav * allocation * leverage
+        max_loss = float(snapshot.value("max_loss") or notional * DEFAULT_MAX_LOSS_PCT)
+        invalidation = snapshot.value("invalidation_condition") or (
+            f"IAV falls below {max(0.05, security.iav.composite_score * 0.5):.3f}"
+        )
 
         intent = TradeIntent(
             intent_id=f"intent-{uuid.uuid4().hex[:8]}",
@@ -486,10 +538,10 @@ class ChatAgent:
             direction="BUY" if security.iav.composite_score >= 0 else "SELL",
             thesis_id=position.thesis_id,
             requested_notional=round(notional, 2),
-            max_loss=round(notional * DEFAULT_MAX_LOSS_PCT, 2),
+            max_loss=round(max_loss, 2),
             maximum_holding_period_days=180,
             profit_targets=[1.15, 1.30],
-            invalidation_condition=f"IAV falls below {max(0.05, security.iav.composite_score * 0.5):.3f}",
+            invalidation_condition=invalidation,
             exit_plan="Scale out at both targets; exit in full on invalidation or watch-condition breach.",
             rationale=(
                 f"{security.manager_breadth} independent clusters, active deviation {security.aqd_pct:+.2%}, "

@@ -97,10 +97,10 @@ def handle(action: Optional[Dict[str, Any]]) -> None:
     payload = action.get("payload", {})
 
     if kind == "ui_event":
-        # The UI is not the source of truth: persist first, then regenerate.
-        turn = agent.record_ui_event(action["event"])
-        if turn is not None:
-            transcript().append(("assistant", turn.reply, turn.view))
+        # The UI is not the source of truth: persist first, then regenerate
+        # every live view computed from the field that changed.
+        for refresh in agent.record_ui_event(action["event"]):
+            _replace_in_transcript(refresh)
         st.rerun()
 
     if kind == ActionType.SWITCH_PROJECT.value:
@@ -150,6 +150,16 @@ def _decide(action: Dict[str, Any], payload: Dict[str, Any]) -> None:
     if record.state is ApprovalState.APPROVED:
         record = stack.approvals.execute(payload["request_id"], actor=operator)
     _flash(record.state.value, f"{payload['request_id']} -> {record.state.value}")
+
+
+def _replace_in_transcript(refresh) -> None:
+    """Swap a stale panel for its regenerated version rather than appending a copy."""
+    entries = transcript()
+    for index, (role, content, view) in enumerate(entries):
+        if view is not None and view.view_id == refresh.replaced_view_id:
+            entries[index] = (role, refresh.turn.reply, refresh.turn.view)
+            return
+    entries.append(("assistant", refresh.turn.reply, refresh.turn.view))
 
 
 def _flash(state: str, message: str) -> None:
