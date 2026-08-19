@@ -9,3 +9,14 @@ services:
     env_file:
       - .env
     command: ["streamlit","run","console/app.py","--server.port","8501","--server.headless","true"]
+  mcp:
+    build: .
+    volumes:
+      - ./:/app
+    ports:
+      - "${PORT:-8600}:${PORT:-8600}"
+    env_file:
+      - .env
+    environment:
+      PORT: "${PORT:-8600}"
+    command: ["sh", "-c", "exec python -m uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-8600}"]

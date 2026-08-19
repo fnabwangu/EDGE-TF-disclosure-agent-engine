@@ -29,3 +29,55 @@ CONTENT SECTIONS:
     5. Repository Directory Layout & Module Index
     6. Local Setup, Testing, and Deployment via Docker Compose
 ========================================================================================
+
+## Live ChatGPT MCP Testing
+
+EDGE's remote MCP service is `api.app:app`. It binds to all interfaces and uses
+`PORT` (default `8600`). The MCP endpoint is `/mcp`; the unauthenticated health
+endpoint is `/health`.
+
+### GitHub Codespaces
+
+From the repository root, set a bearer token in the shell and start the service:
+
+```bash
+export EDGE_API_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export PORT=8600
+python -m uvicorn api.app:app --host 0.0.0.0 --port "$PORT"
+```
+
+In the Codespaces **Ports** panel, make port `8600` public. The MCP URL is:
+
+```text
+https://<codespace-name>-8600.app.github.dev/mcp
+```
+
+Use the exact forwarded URL shown by the Ports panel if your Codespaces domain
+differs. Verify the service before registering it with ChatGPT:
+
+```bash
+curl "https://<codespace-name>-8600.app.github.dev/health"
+curl -H "Authorization: Bearer $EDGE_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  "https://<codespace-name>-8600.app.github.dev/mcp"
+```
+
+The discovered tools include `edge_create_project`, `edge_get_project_state`,
+`edge_record_ui_event`, `edge_component_action`, and `edge_get_view`. Approval,
+execution, order submission, broker credentials, and kill-switch reset tools are
+not exposed.
+
+### Docker Compose
+
+Copy `.env.template` to `.env`, replace `EDGE_API_TOKEN` with a generated value,
+then run `docker compose up mcp`. Compose exposes the MCP service on `PORT` and
+the console separately on port `8501`.
+
+### Production
+
+Deploy the MCP service as a long-running web process behind a managed HTTPS
+proxy or platform domain. Set `PORT`, `EDGE_API_TOKEN`, and any provider secrets
+in the platform secret manager. Register only the stable HTTPS `/mcp` URL in
+ChatGPT Developer Mode; never place secrets in the widget or the MCP URL.
+========================================================================================
