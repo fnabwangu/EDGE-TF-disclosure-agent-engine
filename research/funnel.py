@@ -6,6 +6,7 @@ Path: research/funnel.py
 Ties the stages together and records where every idea sits:
 
     STRATEGY_GENERATION -> DISCLOSURE_SYNTHESIS -> EVIDENCE_REVIEW
+        -> IMPLEMENTATION_GENERATION -> IMPLEMENTATION_SELECTED
         -> TRADE_DESIGN -> APPROVAL -> EXECUTED
 
 The funnel does research and caches results. It does not persist theses or
@@ -21,15 +22,26 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from research.implementations import (
+    ImplementationAssumptions,
+    ImplementationCandidate,
+    ImplementationGenerator,
+)
 from research.simulation import Regime, ingest_candidate
 from research.strategy_generation import StrategyCandidate, StrategyGenerator
 from research.synthesis import DisclosureSynthesizer, ThemeSynthesis, build_panel
+
+
+class SelectionBeforeGeneration(RuntimeError):
+    """Raised when an implementation is chosen before the alternatives exist."""
 
 
 class FunnelStage(str, Enum):
     STRATEGY_GENERATION = "STRATEGY_GENERATION"
     DISCLOSURE_SYNTHESIS = "DISCLOSURE_SYNTHESIS"
     EVIDENCE_REVIEW = "EVIDENCE_REVIEW"
+    IMPLEMENTATION_GENERATION = "IMPLEMENTATION_GENERATION"
+    IMPLEMENTATION_SELECTED = "IMPLEMENTATION_SELECTED"
     TRADE_DESIGN = "TRADE_DESIGN"
     APPROVAL = "APPROVAL"
     EXECUTED = "EXECUTED"
@@ -50,6 +62,7 @@ class FunnelPosition:
     stage: FunnelStage
     thesis_id: Optional[str] = None
     intent_id: Optional[str] = None
+    implementation_id: Optional[str] = None
     blocked_reason: Optional[str] = None
 
     def advance_to(self, stage: FunnelStage) -> "FunnelPosition":
@@ -84,6 +97,9 @@ class ResearchFunnel:
         self.positions: Dict[str, FunnelPosition] = {}
         self._candidates: Dict[str, StrategyCandidate] = {}
         self._synthesis: Dict[str, ThemeSynthesis] = {}
+        self._implementations: Dict[str, List[ImplementationCandidate]] = {}
+        self._selected: Dict[str, ImplementationCandidate] = {}
+        self.implementation_generator = ImplementationGenerator()
 
     # -- stage 1 -----------------------------------------------------------
 
@@ -140,6 +156,52 @@ class ResearchFunnel:
 
     def synthesis(self, strategy_id: str) -> Optional[ThemeSynthesis]:
         return self._synthesis.get(strategy_id)
+
+    # -- stage 3 -----------------------------------------------------------
+
+    def generate_implementations(
+        self,
+        strategy_id: str,
+        *,
+        assumptions: Optional[ImplementationAssumptions] = None,
+        refresh: bool = False,
+    ) -> List[ImplementationCandidate]:
+        """Every eligible expression. Must run before an implementation can be chosen."""
+        synthesis = self._synthesis.get(strategy_id)
+        if synthesis is None:
+            raise SelectionBeforeGeneration(f"{strategy_id} has not been synthesized")
+
+        if refresh or strategy_id not in self._implementations:
+            self._implementations[strategy_id] = self.implementation_generator.generate(
+                self.candidate(strategy_id), synthesis, assumptions=assumptions
+            )
+            self._selected.pop(strategy_id, None)
+
+        self.mark(strategy_id, FunnelStage.IMPLEMENTATION_GENERATION)
+        return self._implementations[strategy_id]
+
+    def implementations(self, strategy_id: str) -> List[ImplementationCandidate]:
+        return self._implementations.get(strategy_id, [])
+
+    def select_implementation(self, strategy_id: str, implementation_id: str) -> ImplementationCandidate:
+        """Refuses to choose from a set that was never generated."""
+        available = self._implementations.get(strategy_id)
+        if not available:
+            raise SelectionBeforeGeneration(
+                f"no implementations generated for {strategy_id}; "
+                "call generate_implementations() before selecting"
+            )
+        chosen = next((c for c in available if c.id == implementation_id), None)
+        if chosen is None:
+            raise KeyError(f"unknown implementation {implementation_id}")
+
+        self._selected[strategy_id] = chosen
+        position = self.mark(strategy_id, FunnelStage.IMPLEMENTATION_SELECTED)
+        position.implementation_id = chosen.id
+        return chosen
+
+    def selected_implementation(self, strategy_id: str) -> Optional[ImplementationCandidate]:
+        return self._selected.get(strategy_id)
 
     # -- stage tracking ----------------------------------------------------
 
