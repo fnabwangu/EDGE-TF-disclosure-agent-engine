@@ -135,6 +135,7 @@ class TransactionService:
             ttl_seconds=self.approval_ttl_seconds,
         )
         record.approval = approval
+        record.approved_fingerprint = canonical_hash(record.intent.economic_fingerprint())
         self._set_state(record, TransactionState.APPROVED, {"approval_id": approval.approval_id})
         return record
 
@@ -152,6 +153,9 @@ class TransactionService:
             return record
         if approval.is_expired():
             self._set_state(record, TransactionState.APPROVAL_EXPIRED, {"reason": "APPROVAL_TTL_ELAPSED"})
+            return record
+        if canonical_hash(record.intent.economic_fingerprint()) != record.approved_fingerprint:
+            self._set_state(record, TransactionState.APPROVAL_EXPIRED, {"reason": "INTENT_MUTATED"})
             return record
 
         validation = validate_intent(record.intent)
@@ -240,8 +244,7 @@ class TransactionService:
 
     @staticmethod
     def _material_drift(prior: TransactionPreview, fresh: TransactionPreview) -> Optional[Dict[str, Any]]:
-        if prior.intent_hash == fresh.intent_hash:
-            return None
+        """Judged on economics, not on the hash: a fresh quote alone is not a change."""
         drift: Dict[str, Any] = {}
         if prior.estimated_price > 0:
             move = abs(fresh.estimated_price - prior.estimated_price) / prior.estimated_price
@@ -253,8 +256,7 @@ class TransactionService:
             drift["risk_gate_passed"] = fresh.risk_gate_passed
         if fresh.quantity != prior.quantity:
             drift["quantity"] = fresh.quantity
-        # Hash changed for a reason not captured above: treat as material.
-        return drift or {"intent_hash": "CHANGED"}
+        return drift or None
 
     def _kill_switch_locked(self) -> bool:
         switch = getattr(self.router, "kill_switch", None)

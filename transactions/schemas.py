@@ -218,6 +218,7 @@ class TransactionRecord(BaseModel):
     intent: TradeIntent
     preview: Optional[TransactionPreview] = None
     approval: Optional[Approval] = None
+    approved_fingerprint: Optional[str] = None
     broker_response: Optional[Dict[str, Any]] = None
     history: List[Dict[str, Any]] = Field(default_factory=list)
 

@@ -135,30 +135,18 @@ class AnomalyDetector:
         Uses historical mean and std to flag significant deviations.
         """
         df = df.copy()
-        
-        def compute_zscore(group):
-            if len(group) < self.min_history:
-                group["z_score"] = np.nan
-                return group
-            
-            # Use rolling window for baseline calculation
-            rolling_mean = group[metric_col].rolling(
-                window=lookback, min_periods=self.min_history
-            ).mean()
-            rolling_std = group[metric_col].rolling(
-                window=lookback, min_periods=self.min_history
-            ).std()
-            
-            # Compute Z-score
-            group["z_score"] = (
-                (group[metric_col] - rolling_mean) / (rolling_std + 1e-8)
-            )
-            return group
 
-        result = df.groupby([fund_id_col, security_id_col], group_keys=False).apply(
-            compute_zscore
+        # transform, not apply: groupby.apply drops the grouping columns on pandas 3.
+        grouped = df.groupby([fund_id_col, security_id_col])[metric_col]
+        rolling_mean = grouped.transform(
+            lambda series: series.rolling(window=lookback, min_periods=self.min_history).mean()
         )
-        return result
+        rolling_std = grouped.transform(
+            lambda series: series.rolling(window=lookback, min_periods=self.min_history).std()
+        )
+
+        df["z_score"] = (df[metric_col] - rolling_mean) / (rolling_std + 1e-8)
+        return df
 
     def flag_anomalies(
         self,

@@ -118,6 +118,43 @@ def test_mutating_size_after_approval_voids_the_approval():
     assert broker.submitted == []
 
 
+class MovingQuotes(FakeQuotes):
+    """Every call returns a new timestamp, as a real feed would."""
+
+    def get_quote(self, symbol: str) -> Quote:
+        quote = super().get_quote(symbol)
+        return quote.model_copy(update={"timestamp": datetime.now(timezone.utc)})
+
+
+def test_a_fresh_quote_alone_does_not_void_an_approval():
+    broker = FakeBroker()
+    quotes = MovingQuotes(spread=0.005)
+    service = make_service(broker=broker, quotes=quotes)
+    service.register_draft(make_intent())
+
+    record = service.create_preview("intent-1", user_id="op-1")
+    service.approve("intent-1", intent_hash=record.preview.intent_hash, approver_id="op-1")
+    final = service.execute("intent-1", user_id="op-1")
+
+    assert final.state is TransactionState.SUBMITTED
+    assert len(broker.submitted) == 1
+
+
+def test_material_price_drift_voids_the_approval():
+    broker = FakeBroker()
+    quotes = MovingQuotes(price=100.0, spread=0.005)
+    service = make_service(broker=broker, quotes=quotes)
+    service.register_draft(make_intent(limit_price=None, requested_quantity=None, requested_notional=42_000.0))
+
+    record = service.create_preview("intent-1", user_id="op-1")
+    service.approve("intent-1", intent_hash=record.preview.intent_hash, approver_id="op-1")
+    quotes.price = 103.0
+
+    final = service.execute("intent-1", user_id="op-1")
+    assert final.state is TransactionState.APPROVAL_EXPIRED
+    assert broker.submitted == []
+
+
 def test_approval_with_stale_hash_is_rejected():
     service = make_service()
     service.register_draft(make_intent())
