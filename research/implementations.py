@@ -100,6 +100,10 @@ class ImplementationCandidate:
     rationale: str
     risks: List[str] = field(default_factory=list)
     assumptions: Dict[str, Any] = field(default_factory=dict)
+    # "EDGE_DETERMINISTIC" or "OPENAI:<model>" - who proposed this candidate.
+    # Provenance only: acceptance always runs through the same structural and
+    # policy/risk gates regardless of source.
+    generated_by: str = "EDGE_DETERMINISTIC"
 
     @property
     def risk_adjusted_score(self) -> float:

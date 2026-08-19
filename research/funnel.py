@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from research.implementations import (
     ImplementationAssumptions,
@@ -30,6 +30,10 @@ from research.implementations import (
 from research.simulation import Regime, ingest_candidate
 from research.strategy_generation import StrategyCandidate, StrategyGenerator
 from research.synthesis import DisclosureSynthesizer, ThemeSynthesis, build_panel
+
+if TYPE_CHECKING:
+    from audit.decision_records import DecisionRecorder
+    from research.llm_implementations import LLMImplementationGenerator, QuarantinedCandidate
 
 
 class SelectionBeforeGeneration(RuntimeError):
@@ -98,8 +102,11 @@ class ResearchFunnel:
         self._candidates: Dict[str, StrategyCandidate] = {}
         self._synthesis: Dict[str, ThemeSynthesis] = {}
         self._implementations: Dict[str, List[ImplementationCandidate]] = {}
+        self._quarantined: Dict[str, List["QuarantinedCandidate"]] = {}
         self._selected: Dict[str, ImplementationCandidate] = {}
         self.implementation_generator = ImplementationGenerator()
+        self.llm_implementation_generator: Optional["LLMImplementationGenerator"] = None
+        self.decision_recorder: Optional["DecisionRecorder"] = None
 
     # -- stage 1 -----------------------------------------------------------
 
@@ -179,6 +186,54 @@ class ResearchFunnel:
 
         self.mark(strategy_id, FunnelStage.IMPLEMENTATION_GENERATION)
         return self._implementations[strategy_id]
+
+    def generate_implementations_llm(
+        self,
+        strategy_id: str,
+        *,
+        project_id: Optional[str] = None,
+        assumptions: Optional[ImplementationAssumptions] = None,
+        generator: Optional["LLMImplementationGenerator"] = None,
+        recorder: Optional["DecisionRecorder"] = None,
+        refresh: bool = False,
+    ) -> List[ImplementationCandidate]:
+        """Path B: propose candidates via a model, gate every one, log the Decision Record."""
+        from audit.decision_records import DecisionRecorder
+        from research.llm_implementations import LLMImplementationGenerator
+
+        synthesis = self._synthesis.get(strategy_id)
+        if synthesis is None:
+            raise SelectionBeforeGeneration(f"{strategy_id} has not been synthesized")
+
+        if refresh or strategy_id not in self._implementations:
+            generator = generator or self.llm_implementation_generator or LLMImplementationGenerator()
+            recorder = recorder or self.decision_recorder or DecisionRecorder()
+            result = generator.generate(self.candidate(strategy_id), synthesis, assumptions=assumptions)
+
+            recorder.record_implementation_generation(
+                project_id=project_id,
+                strategy_id=strategy_id,
+                model=result.model,
+                response_id=result.response_id,
+                instructions=result.instructions,
+                input_summary=result.input_summary,
+                raw_candidates=result.raw_candidates,
+                validation_results=[
+                    {"proposed_type": q.proposed_type, "reasons": q.reasons} for q in result.quarantined
+                ],
+                accepted_candidate_ids=[c.id for c in result.accepted],
+                error=result.error,
+            )
+
+            self._implementations[strategy_id] = result.accepted
+            self._quarantined[strategy_id] = result.quarantined
+            self._selected.pop(strategy_id, None)
+
+        self.mark(strategy_id, FunnelStage.IMPLEMENTATION_GENERATION)
+        return self._implementations[strategy_id]
+
+    def quarantined_candidates(self, strategy_id: str) -> List["QuarantinedCandidate"]:
+        return self._quarantined.get(strategy_id, [])
 
     def implementations(self, strategy_id: str) -> List[ImplementationCandidate]:
         return self._implementations.get(strategy_id, [])

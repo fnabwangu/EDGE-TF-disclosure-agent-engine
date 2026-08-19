@@ -50,7 +50,13 @@ Intents:
 - open_thesis     args: {"query": "..."}   make the current idea durable
 - generate_implementations
                   args: {"query": "..."} or {"strategy_id": "theme:function"}
-                  generate every eligible way to express a confirmed thesis, side by side
+                  generate every eligible way to express a confirmed thesis, side by side,
+                  from EDGE's deterministic engines
+- generate_implementations_llm
+                  args: {"query": "..."} or {"strategy_id": "theme:function"}
+                  ask a hosted model to propose implementations instead - only when the user
+                  explicitly asks to use the model/AI/GPT for this. Every proposal still passes
+                  through EDGE's own gates before publication.
 - select_implementation
                   args: {"strategy_id": "theme:function", "implementation_id": "..."}
                   choose one of the already-generated candidates - never invent an id

@@ -47,6 +47,7 @@ IMPLICIT_DEPENDENCIES: Dict[str, FrozenSet[str]] = {
         {"max_loss", "invalidation_condition", "execution_buffer_days", "base_allocation"}
     ),
     "generate_implementations": frozenset(),
+    "generate_implementations_llm": frozenset(),
     "select_implementation": frozenset(),
     "open_thesis": frozenset({"invalidation_condition"}),
     "inbox": frozenset(),
@@ -111,6 +112,10 @@ class KeywordRouter:
         ("inbox", r"\b(inbox|waiting on me|pending|approvals?)\b"),
         ("board", r"\b(pipeline|funnel|board|stages?)\b"),
         ("synthesize", r"\b(synth|synthesi[sz]e|disclosures?|holdings|analy[sz]e|dig into)\b"),
+        (
+            "generate_implementations_llm",
+            r"\b(ask|have)\b.*\b(model|gpt|openai|ai)\b.*\b(propose|generate|implementations?)\b",
+        ),
         ("generate_implementations", r"\b(implementation|expression)s?\b.*\b(generat|compar|options?|alternativ|side.by.side)\b|\b(compare|show)\b.*\bimplementations?\b"),
         ("design_trade", r"\b(size it|design a trade|implement|position it)\b"),
         ("open_thesis", r"\b(open a thesis|start a thesis|track this|save this)\b"),
@@ -140,6 +145,7 @@ class ChatAgent:
         "synthesize",
         "open_thesis",
         "generate_implementations",
+        "generate_implementations_llm",
         "select_implementation",
         "design_trade",
         "catalyst",
@@ -666,6 +672,57 @@ class ChatAgent:
             ),
             view=view,
             tool_calls=["generate_implementations"],
+        )
+
+    def _do_generate_implementations_llm(self, query: str = "", strategy_id: Optional[str] = None) -> AgentTurn:
+        """Path B: a model proposes candidates; EDGE's gates decide what survives."""
+        from orchestration.llm import openai_configured
+
+        strategy_id = strategy_id or self._resolve_strategy(query) or self.focus_strategy_id
+        synthesis = self.funnel.synthesis(strategy_id) if strategy_id else None
+        if synthesis is None or not synthesis.usable:
+            return AgentTurn(
+                reply="Synthesize the disclosures first - implementations are generated from measured evidence."
+            )
+
+        position = self.funnel.positions.get(strategy_id)
+        if position is None or position.thesis_id is None:
+            return AgentTurn(
+                reply=(
+                    f"**{strategy_id}** has no thesis yet. Open a thesis before generating implementations - "
+                    "no position exists without a recorded reason."
+                )
+            )
+
+        if not openai_configured():
+            return AgentTurn(
+                reply=(
+                    "No OpenAI key is configured, so I cannot ask a model to propose implementations. "
+                    "Say 'compare implementations' for the deterministic path instead."
+                )
+            )
+
+        candidates = self.funnel.generate_implementations_llm(strategy_id, project_id=self.project_id)
+        quarantined = self.funnel.quarantined_candidates(strategy_id)
+        self.focus_strategy_id = strategy_id
+        view = compose.implementations_view(candidates, strategy_id=strategy_id, project_id=self.project_id)
+
+        types = ", ".join(sorted({c.type.value for c in candidates}))
+        top = candidates[0]
+        quarantine_note = (
+            f" {len(quarantined)} model-proposed candidate(s) were rejected by EDGE's policy gates: "
+            f"{', '.join(q.proposed_type for q in quarantined)}."
+            if quarantined
+            else ""
+        )
+        return AgentTurn(
+            reply=(
+                f"Asked the model to propose implementations; {len(candidates)} passed EDGE's structural and "
+                f"policy/risk gates: {types}.{quarantine_note} Best risk-adjusted is **{top.type.value}** "
+                f"at {top.risk_adjusted_score:.3f}. Select one to size it - the model never decides for you."
+            ),
+            view=view,
+            tool_calls=["generate_implementations_llm"],
         )
 
     def _do_select_implementation(

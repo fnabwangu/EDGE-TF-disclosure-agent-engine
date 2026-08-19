@@ -11,4 +11,5 @@ __pycache__/
 data/audit_logs/*.json
 data/workbench/
 data/simulated/
+data/decision_records/
 *.egg-info/
