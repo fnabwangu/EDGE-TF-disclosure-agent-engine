@@ -10,12 +10,14 @@ clicked - it never performs one.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
 
 from ui.schemas import ActionType, ComponentType, GenerativeView, UIAction, UIComponent
+from ui.state import FieldKind, FieldSpec, UIEvent
 
 TIER_COLOR = {"LOW": "blue", "MEDIUM": "orange", "HIGH": "red", "CRITICAL": "red"}
 STATE_ICON = {
@@ -37,15 +39,80 @@ def render_view(view: GenerativeView, *, key_prefix: str = "") -> Optional[Dict[
 
     clicked: Optional[Dict[str, Any]] = None
     for index, component in enumerate(view.components):
-        result = render_component(component, key=f"{key_prefix}{view.view_id}-{index}")
+        result = render_component(component, key=f"{key_prefix}{view.view_id}-{index}", view=view)
         clicked = clicked or result
     return clicked
 
 
-def render_component(component: UIComponent, *, key: str) -> Optional[Dict[str, Any]]:
+def render_component(
+    component: UIComponent, *, key: str, view: Optional[GenerativeView] = None
+) -> Optional[Dict[str, Any]]:
     handler = _HANDLERS.get(component.type, _render_fallback)
     with st.container(border=True):
-        return handler(component, key)
+        result = handler(component, key)
+        if component.fields and view is not None:
+            result = result or _render_fields(component, key, view)
+        return result
+
+
+def _render_fields(component: UIComponent, key: str, view: GenerativeView) -> Optional[Dict[str, Any]]:
+    """Draw declared controls hydrated from project state; emit an event on change."""
+    st.markdown("**Inputs**")
+    for index, spec in enumerate(component.fields):
+        stored = view.state.get(spec.field_id)
+        current = stored.value if stored is not None else None
+        new_value = _render_field(spec, current, f"{key}-f{index}")
+
+        if _normalize(new_value) != _normalize(current):
+            return {
+                "type": "ui_event",
+                "event": UIEvent.field_changed(
+                    view_id=view.view_id,
+                    project_id=view.project_id or "",
+                    session_id=view.session_id,
+                    field_id=spec.field_id,
+                    value=_normalize(new_value),
+                    persistence=spec.persistence,
+                ),
+            }
+
+        if spec.required and not (stored and stored.is_set):
+            st.caption(f":red[{spec.label} is required]")
+    return None
+
+
+def _render_field(spec: FieldSpec, current: Any, widget_key: str) -> Any:
+    if spec.kind is FieldKind.DATE:
+        parsed = None
+        if isinstance(current, str) and current:
+            try:
+                parsed = date.fromisoformat(current[:10])
+            except ValueError:
+                parsed = None
+        return st.date_input(spec.label, value=parsed, key=widget_key, help=spec.help, format="YYYY-MM-DD")
+    if spec.kind is FieldKind.NUMBER:
+        value = float(current) if current not in (None, "") else 0.0
+        return st.number_input(spec.label, value=value, key=widget_key, help=spec.help)
+    if spec.kind is FieldKind.CHOICE:
+        options = spec.options or []
+        index = options.index(current) if current in options else 0
+        return st.selectbox(spec.label, options, index=index, key=widget_key, help=spec.help)
+    if spec.kind is FieldKind.BOOLEAN:
+        return st.checkbox(spec.label, value=bool(current), key=widget_key, help=spec.help)
+    return st.text_input(
+        spec.label, value=current or "", key=widget_key, help=spec.help, placeholder=spec.placeholder or ""
+    )
+
+
+def _normalize(value: Any) -> Any:
+    """Widget output and stored state must compare on the same terms."""
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    if value in (0, "", None):
+        return None
+    return value
 
 
 def _emit(action: UIAction) -> Dict[str, Any]:

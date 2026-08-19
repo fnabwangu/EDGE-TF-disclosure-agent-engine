@@ -17,9 +17,8 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Protocol
-
 from approvals.service import ApprovalService
 from orchestration import ui_composer as compose
 from research.catalyst import CatalystPlanner, CatalystStrategy
@@ -28,12 +27,26 @@ from research.lexicon import Stance, TradeKind, expand
 from transactions.schemas import TradeIntent
 from transactions.service import TransactionService
 from ui.registry import approval_inbox, approval_panel, continuity_panel
+from ui.hydration import hydrate
 from ui.schemas import ActionType, ComponentType, GenerativeView, UIComponent
+from ui.state import Persistence, ProjectStateSnapshot, UIEvent, UIEventType
 from workbench.schemas import EventKind, Evidence, IdeaState, Thesis, WatchCondition
 from workbench.store import WorkbenchStore
 
 BASE_ALLOCATION = 0.02
 DEFAULT_MAX_LOSS_PCT = 0.15
+CATALYST_BUFFER_DAYS = 14
+
+
+def _as_date(value: Any) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return None
+    return None
 
 
 @dataclass(frozen=True)
@@ -58,7 +71,9 @@ class AgentTurn:
 
 
 class LanguageModel(Protocol):
-    def route(self, message: str, *, history: List[ChatMessage], intents: List[str]) -> Optional[Intent]: ...
+    def route(
+        self, message: str, *, history: List[ChatMessage], intents: List[str], context: str = ""
+    ) -> Optional[Intent]: ...
 
 
 class KeywordRouter:
@@ -75,7 +90,9 @@ class KeywordRouter:
         ("help", r"\b(help|what can you do|how does this work)\b"),
     ]
 
-    def route(self, message: str, *, history: List[ChatMessage], intents: List[str]) -> Optional[Intent]:
+    def route(
+        self, message: str, *, history: List[ChatMessage], intents: List[str], context: str = ""
+    ) -> Optional[Intent]:
         text = message.lower().strip()
 
         # A dated macro event outranks every keyword: it is not an adoption trade.
@@ -132,10 +149,29 @@ class ChatAgent:
 
     def send(self, message: str) -> AgentTurn:
         self.history.append(ChatMessage(role="user", content=message))
-        intent = self.model.route(message, history=self.history, intents=self.INTENTS) or Intent("help")
+        intent = self.model.route(
+            message, history=self.history, intents=self.INTENTS, context=self.state_context()
+        ) or Intent("help")
         turn = self.dispatch(intent)
         self.history.append(ChatMessage(role="assistant", content=turn.reply, view=turn.view))
         return turn
+
+    def project_state(self) -> ProjectStateSnapshot:
+        """Authoritative state. The UI is never the source of truth; this is."""
+        return self.workbench.project_state(self.project_id, session_id=self.session_id)
+
+    def state_context(self) -> str:
+        return self.project_state().as_context()
+
+    def record_ui_event(self, event: UIEvent) -> Optional[AgentTurn]:
+        """Persist an interaction, then let the affected view regenerate from state."""
+        self.workbench.record_ui_event(event)
+        if event.event_type is not UIEventType.FIELD_CHANGED:
+            return None
+        if event.field_id in {"catalyst_date", "secondary_catalyst_date", "execution_buffer_days", "stance"}:
+            if self.focus_concept is not None:
+                return self._do_catalyst(query="", stance=self.project_state().value("stance"))
+        return None
 
     def act(self, action: Dict[str, Any]) -> Optional[AgentTurn]:
         """A button click is a pre-parsed intent; it runs the same handlers."""
@@ -156,7 +192,10 @@ class ChatAgent:
         handler = getattr(self, f"_do_{intent.name}", None)
         if handler is None:
             return AgentTurn(reply=f"I do not have a handler for '{intent.name}'.")
-        return handler(**intent.args) if intent.args else handler()
+        turn = handler(**intent.args) if intent.args else handler()
+        if turn.view is not None:
+            hydrate(turn.view, self.project_state())
+        return turn
 
     # -- handlers ----------------------------------------------------------
 
@@ -214,7 +253,16 @@ class ChatAgent:
             return AgentTurn(reply=self._no_candidates_message(query, concept))
         self.focus_concept = concept
 
-        strategy = self.catalyst_planner.plan(concept)
+        snapshot = self.project_state()
+        dates = [d for d in (_as_date(snapshot.value("catalyst_date")), _as_date(snapshot.value("secondary_catalyst_date"))) if d]
+        buffer_days = snapshot.value("execution_buffer_days")
+
+        strategy = self.catalyst_planner.plan(
+            concept,
+            # The position must survive to the last dated event, not the first.
+            catalyst_date=max(dates) if dates else None,
+            execution_buffer_days=int(buffer_days) if buffer_days else CATALYST_BUFFER_DAYS,
+        )
         self.catalysts[strategy.strategy_id] = strategy
         view = compose.catalyst_view(strategy, project_id=self.project_id)
 
@@ -239,11 +287,23 @@ class ChatAgent:
                 f"resolve a single-day policy catalyst anyway.\n\n"
                 f"What I can do: a **{strategy.stance.value.lower()}** stance expresses through **{tickers}**"
                 + (f", benchmarked against {benchmarks}" if benchmarks else "")
-                + ". Give me the catalyst date and I will size it with the event discipline enforced - "
-                "expiry must clear the catalyst plus the execution buffer."
+                + self._catalyst_dates_sentence(strategy)
             ),
             view=view,
             tool_calls=["plan_catalyst"],
+        )
+
+    @staticmethod
+    def _catalyst_dates_sentence(strategy) -> str:
+        if strategy.catalyst_date is None:
+            return (
+                ". Give me the catalyst date and I will size it with the event discipline enforced - "
+                "expiry must clear the catalyst plus the execution buffer."
+            )
+        return (
+            f".\n\nUsing the dates you entered: catalyst **{strategy.catalyst_date}**, buffer "
+            f"{strategy.execution_buffer_days} days, so any expiry must fall after "
+            f"**{strategy.minimum_expiration()}**."
         )
 
     def _no_candidates_message(self, query: str, concept) -> str:

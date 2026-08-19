@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from ui.state import FieldSpec, UIFieldState
+
 
 class ComponentType(str, Enum):
     METRIC = "metric"
@@ -81,6 +83,7 @@ class UIComponent(BaseModel):
     type: ComponentType
     title: str
     data: Dict[str, Any] = Field(default_factory=dict)
+    fields: List[FieldSpec] = Field(default_factory=list)
     actions: List[UIAction] = Field(default_factory=list)
     provenance: List[str] = Field(default_factory=list)
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
@@ -93,12 +96,16 @@ class GenerativeView(BaseModel):
     title: str
     summary: Optional[str] = None
     components: List[UIComponent] = Field(default_factory=list)
+    state: Dict[str, UIFieldState] = Field(default_factory=dict)
     project_id: Optional[str] = None
     session_id: Optional[str] = None
     thesis_id: Optional[str] = None
     surface: Literal["WEB", "CHAT_APP", "API", "CONSOLE"] = "WEB"
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     tool_calls: List[str] = Field(default_factory=list)
+
+    def declared_fields(self) -> List[FieldSpec]:
+        return [spec for component in self.components for spec in component.fields]
 
 
 __all__ = ["ActionType", "ComponentType", "GenerativeView", "UIAction", "UIComponent"]

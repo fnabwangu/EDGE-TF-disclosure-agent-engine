@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from transactions.schemas import canonical_hash
+from ui.state import Persistence, ProjectStateSnapshot, UIEvent, UIEventType, UIFieldState
 from workbench.schemas import (
     WORKSPACE_SCOPE,
     ContinuityBrief,
@@ -286,6 +287,70 @@ class WorkbenchStore:
         digests.sort(key=lambda d: (not d.needs_attention, -d.pending_approval_count, d.name))
         return WorkspaceBrief(projects=digests, total_pending_approvals=total_pending)
 
+    def record_ui_event(self, event: UIEvent) -> UIFieldState | None:
+        """Persist an interaction. Field changes become authoritative project state."""
+        if event.event_type is UIEventType.FIELD_CHANGED and event.field_id:
+            self.append(
+                EventKind.UI_FIELD_CHANGED,
+                project_id=event.project_id,
+                session_id=event.session_id,
+                actor=event.actor,
+                subject_id=event.view_id,
+                payload={
+                    "field_id": event.field_id,
+                    "value": event.value,
+                    "persistence": event.persistence.value,
+                    "view_id": event.view_id,
+                },
+            )
+            return self.projection(project_id=event.project_id).field_states.get(event.field_id)
+
+        self.append(
+            EventKind.UI_INTERACTION,
+            project_id=event.project_id,
+            session_id=event.session_id,
+            actor=event.actor,
+            subject_id=event.view_id,
+            payload={
+                "event_type": event.event_type.value,
+                "action": event.action,
+                "field_id": event.field_id,
+                "value": event.value,
+            },
+        )
+        return None
+
+    def project_state(
+        self, project_id: str, *, session_id: Optional[str] = None
+    ) -> ProjectStateSnapshot:
+        """Authoritative state for a project, as handed to the model and to hydration."""
+        state = self.projection(project_id=project_id)
+        project = state.projects.get(project_id)
+
+        fields = {
+            field_id: field
+            for field_id, field in state.field_states.items()
+            # Session-scoped values belong to the session that set them.
+            if field.persistence is Persistence.PROJECT
+            or session_id is None
+            or field.updated_in_session == session_id
+        }
+
+        return ProjectStateSnapshot(
+            project_id=project_id,
+            project_name=project.name if project else None,
+            session_id=session_id,
+            fields=fields,
+            theses=[
+                {"thesis_id": t.thesis_id, "title": t.title, "state": t.state.value}
+                for t in state.theses.values()
+                if t.state in ACTIVE_STATES
+            ],
+            open_transactions=open_transactions(state),
+            pending_actions=[a["request_id"] for a in pending_actions(state)],
+            breached_conditions=[c["condition_id"] for c in breached_conditions(state)],
+        )
+
     def evaluate_watch_conditions(
         self,
         metrics: Dict[str, float],
@@ -456,6 +521,19 @@ def _apply(state: WorkbenchState, event: WorkbenchEvent) -> None:
 
     elif kind is EventKind.INTENT_STATE_CHANGED:
         state.intent_states[payload["intent_id"]] = payload["state"]
+
+    elif kind is EventKind.UI_FIELD_CHANGED:
+        field_id = payload["field_id"]
+        previous = state.field_states.get(field_id)
+        state.field_states[field_id] = UIFieldState(
+            field_id=field_id,
+            value=payload.get("value"),
+            persistence=Persistence(payload.get("persistence", Persistence.PROJECT.value)),
+            revision=(previous.revision + 1) if previous else 1,
+            updated_at=event.at,
+            updated_by=event.actor,
+            updated_in_session=event.session_id,
+        )
 
     elif kind is EventKind.ACTION_REQUESTED:
         state.action_states[payload["request_id"]] = {

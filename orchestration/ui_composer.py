@@ -17,6 +17,7 @@ from research.catalyst import CatalystStrategy
 from research.strategy_generation import StrategyCandidate
 from research.synthesis import SecuritySynthesis, ThemeSynthesis
 from ui.schemas import ActionType, ComponentType, GenerativeView, UIAction, UIComponent
+from ui.state import FieldKind, FieldSpec, Persistence
 
 
 def new_view(title: str, *, summary: Optional[str] = None, **kwargs: Any) -> GenerativeView:
@@ -347,6 +348,42 @@ def catalyst_expressions(strategy: "CatalystStrategy") -> UIComponent:
     )
 
 
+CATALYST_FIELDS = [
+    FieldSpec(
+        field_id="catalyst_date",
+        label="Catalyst date",
+        kind=FieldKind.DATE,
+        required=True,
+        help="The dated event this trade is expressed against.",
+    ),
+    FieldSpec(
+        field_id="secondary_catalyst_date",
+        label="Secondary catalyst date",
+        kind=FieldKind.DATE,
+        help="A follow-on event, such as Jackson Hole after FOMC minutes.",
+    ),
+    FieldSpec(
+        field_id="execution_buffer_days",
+        label="Execution buffer (days)",
+        kind=FieldKind.NUMBER,
+        required=True,
+    ),
+    FieldSpec(field_id="max_loss", label="Maximum loss (USD)", kind=FieldKind.NUMBER, required=True),
+    FieldSpec(
+        field_id="invalidation_condition",
+        label="Invalidation condition",
+        kind=FieldKind.TEXT,
+        required=True,
+    ),
+    FieldSpec(
+        field_id="stance",
+        label="Stance",
+        kind=FieldKind.CHOICE,
+        options=["HAWKISH", "DOVISH", "VOLATILITY"],
+    ),
+]
+
+
 def catalyst_checklist(strategy: "CatalystStrategy") -> UIComponent:
     minimum = strategy.minimum_expiration()
     return UIComponent(
@@ -354,13 +391,24 @@ def catalyst_checklist(strategy: "CatalystStrategy") -> UIComponent:
         title="Event trade requirements",
         data={
             "budgets": [
-                {"requirement": "Catalyst date", "value": str(strategy.catalyst_date or "REQUIRED"), "satisfied": strategy.catalyst_date is not None},
-                {"requirement": "Execution buffer (days)", "value": strategy.execution_buffer_days, "satisfied": True},
-                {"requirement": "Earliest valid expiration", "value": str(minimum or "-"), "satisfied": minimum is not None},
-                {"requirement": "Defined max loss", "value": "REQUIRED", "satisfied": False},
-                {"requirement": "Invalidation condition", "value": "REQUIRED", "satisfied": False},
+                {
+                    "requirement": "Catalyst date",
+                    "value": str(strategy.catalyst_date or "REQUIRED"),
+                    "satisfied": strategy.catalyst_date is not None,
+                },
+                {
+                    "requirement": "Execution buffer (days)",
+                    "value": strategy.execution_buffer_days,
+                    "satisfied": True,
+                },
+                {
+                    "requirement": "Earliest valid expiration",
+                    "value": str(minimum or "-"),
+                    "satisfied": minimum is not None,
+                },
             ]
         },
+        fields=CATALYST_FIELDS,
         provenance=["transactions/validator.py"],
     )
 

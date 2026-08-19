@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from ui.state import UIFieldState
+
 
 WORKSPACE_SCOPE = "__workspace__"
 
@@ -56,6 +58,8 @@ class EventKind(str, Enum):
     WATCH_CONDITION_BREACHED = "WATCH_CONDITION_BREACHED"
     INTENT_LINKED = "INTENT_LINKED"
     INTENT_STATE_CHANGED = "INTENT_STATE_CHANGED"
+    UI_FIELD_CHANGED = "UI_FIELD_CHANGED"
+    UI_INTERACTION = "UI_INTERACTION"
     VIEW_PINNED = "VIEW_PINNED"
     NOTE_ADDED = "NOTE_ADDED"
 
@@ -173,6 +177,7 @@ class WorkbenchState(BaseModel):
     pins: Dict[str, PinnedView] = Field(default_factory=dict)
     intent_states: Dict[str, str] = Field(default_factory=dict)
     action_states: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    field_states: Dict[str, UIFieldState] = Field(default_factory=dict)
     notes: List[Dict[str, Any]] = Field(default_factory=list)
     last_event_hash: Optional[str] = None
     event_count: int = 0

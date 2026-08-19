@@ -84,11 +84,11 @@ class HostedLanguageModel:
         self.config = config
         self.session = session or requests.Session()
 
-    def route(self, message: str, *, history: List[Any], intents: List[str]):
+    def route(self, message: str, *, history: List[Any], intents: List[str], context: str = ""):
         from orchestration.agent import Intent  # imported here to avoid a cycle
 
         try:
-            raw = self._complete(message, history)
+            raw = self._complete(message, history, context)
         except (requests.RequestException, ValueError, KeyError):
             return None
 
@@ -105,17 +105,18 @@ class HostedLanguageModel:
 
     # -- providers ---------------------------------------------------------
 
-    def _complete(self, message: str, history: List[Any]) -> str:
+    def _complete(self, message: str, history: List[Any], context: str = "") -> str:
         turns = [
             {"role": item.role, "content": item.content}
             for item in history[-6:]
             if getattr(item, "content", None)
         ]
+        system = f"{ROUTING_SYSTEM}\n\n{context}" if context else ROUTING_SYSTEM
         if self.config.provider == "openai":
-            return self._openai(turns, message)
-        return self._anthropic(turns, message)
+            return self._openai(turns, message, system)
+        return self._anthropic(turns, message, system)
 
-    def _openai(self, turns: List[Dict[str, str]], message: str) -> str:
+    def _openai(self, turns: List[Dict[str, str]], message: str, system: str) -> str:
         response = self.session.post(
             OPENAI_URL,
             headers={"Authorization": f"Bearer {self.config.api_key}"},
@@ -123,14 +124,14 @@ class HostedLanguageModel:
                 "model": self.config.model,
                 "temperature": 0,
                 "response_format": {"type": "json_object"},
-                "messages": [{"role": "system", "content": ROUTING_SYSTEM}, *turns, {"role": "user", "content": message}],
+                "messages": [{"role": "system", "content": system}, *turns, {"role": "user", "content": message}],
             },
             timeout=TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
 
-    def _anthropic(self, turns: List[Dict[str, str]], message: str) -> str:
+    def _anthropic(self, turns: List[Dict[str, str]], message: str, system: str) -> str:
         response = self.session.post(
             ANTHROPIC_URL,
             headers={
@@ -142,7 +143,7 @@ class HostedLanguageModel:
                 "model": self.config.model,
                 "max_tokens": 256,
                 "temperature": 0,
-                "system": ROUTING_SYSTEM,
+                "system": system,
                 "messages": [*turns, {"role": "user", "content": message}],
             },
             timeout=TIMEOUT_SECONDS,

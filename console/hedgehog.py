@@ -96,6 +96,13 @@ def handle(action: Optional[Dict[str, Any]]) -> None:
     kind = action["type"]
     payload = action.get("payload", {})
 
+    if kind == "ui_event":
+        # The UI is not the source of truth: persist first, then regenerate.
+        turn = agent.record_ui_event(action["event"])
+        if turn is not None:
+            transcript().append(("assistant", turn.reply, turn.view))
+        st.rerun()
+
     if kind == ActionType.SWITCH_PROJECT.value:
         open_project(payload["project_id"])
         st.rerun()
