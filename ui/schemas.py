@@ -70,6 +70,7 @@ class ActionType(str, Enum):
     SYNTHESIZE_DISCLOSURES = "synthesize_disclosures"
     OPEN_THESIS = "open_thesis"
     SELECT_IMPLEMENTATION = "select_implementation"
+    GENERATE_STRATEGIES = "generate_strategies"
 
 
 class UIAction(BaseModel):

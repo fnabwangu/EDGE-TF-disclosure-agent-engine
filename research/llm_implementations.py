@@ -45,6 +45,7 @@ from research.implementations import (
 )
 from research.strategy_generation import StrategyCandidate
 from research.synthesis import ThemeSynthesis
+from orchestration.llm import resolve_openai_model
 
 try:
     import openai as openai_sdk
@@ -151,7 +152,13 @@ class LLMImplementationGenerator:
 
     def __init__(self, *, model: Optional[str] = None, client: Optional[Any] = None):
         ensure_env_loaded()
-        self.model = model or os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if model is not None:
+            self.model = model
+        elif api_key and not api_key.startswith("your_"):
+            self.model = resolve_openai_model(api_key)
+        else:
+            self.model = os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
         self._client = client
 
     def _get_client(self):

@@ -112,6 +112,9 @@ def test_the_component_writes_changes_back_rather_than_holding_them():
     # Controls are populated from persisted state, not from local memory.
     assert "function fieldValue" in source
     assert "view.state" in source
+    assert "function adoptResult" in source
+    assert "edge_component_action" in source
+    assert "component.actions" in source
 
 
 def test_the_component_handles_every_field_kind():
@@ -162,6 +165,135 @@ def test_a_component_field_change_persists_and_rehydrates(rpc):
     assert "2026-08-27" in reply["content"][0]["text"]
     assert reply["structuredContent"]["view"]["state"]["catalyst_date"]["value"] == "2026-08-27"
     assert reply["_meta"]["openai/outputTemplate"] == WIDGET_URI
+
+
+def test_a_field_change_without_refresh_keeps_the_current_view(rpc):
+    created = call(
+        rpc,
+        "tools/call",
+        {"name": "edge_create_project", "arguments": {"name": "Power infrastructure"}},
+    )["result"]["structuredContent"]
+    view = created["view"]
+    result = call(
+        rpc,
+        "tools/call",
+        {
+            "name": "edge_record_ui_event",
+            "arguments": {
+                "project_id": created["project_id"],
+                "view_id": view["view_id"],
+                "event_type": "FIELD_CHANGED",
+                "field_id": "strategy_query",
+                "value": "Power infrastructure",
+            },
+        },
+    )["result"]["structuredContent"]
+
+    assert result["refreshed"] == []
+    assert result["view"]["view_id"] == view["view_id"]
+    assert result["view"]["state"]["strategy_query"]["value"] == "Power infrastructure"
+
+
+def test_component_actions_drive_the_research_funnel_without_capital_tools(rpc):
+    created = call(
+        rpc,
+        "tools/call",
+        {"name": "edge_create_project", "arguments": {"name": "Power infrastructure"}},
+    )["result"]["structuredContent"]
+    project_id = created["project_id"]
+    intake = created["view"]
+    call(
+        rpc,
+        "tools/call",
+        {
+            "name": "edge_record_ui_event",
+            "arguments": {
+                "project_id": project_id,
+                "view_id": intake["view_id"],
+                "event_type": "FIELD_CHANGED",
+                "field_id": "strategy_query",
+                "value": "Power infrastructure",
+            },
+        },
+    )
+    generate = call(
+        rpc,
+        "tools/call",
+        {
+            "name": "edge_component_action",
+            "arguments": {
+                "project_id": project_id,
+                "view_id": intake["view_id"],
+                "type": "generate_strategies",
+                "payload": {"query_field": "strategy_query"},
+            },
+        },
+    )["result"]["structuredContent"]
+    strategy_view = generate["view"]
+    synth_action = next(
+        action
+        for component in strategy_view["components"]
+        for action in component.get("actions", [])
+        if action["type"] == "synthesize_disclosures"
+    )
+    synthesis = call(
+        rpc,
+        "tools/call",
+        {"name": "edge_component_action", "arguments": {
+            "project_id": project_id,
+            "view_id": strategy_view["view_id"],
+            "type": synth_action["type"],
+            "payload": synth_action["payload"],
+        }},
+    )["result"]["structuredContent"]
+    thesis_action = next(
+        action
+        for component in synthesis["view"]["components"]
+        for action in component.get("actions", [])
+        if action["type"] == "open_thesis"
+    )
+    thesis = call(
+        rpc,
+        "tools/call",
+        {"name": "edge_component_action", "arguments": {
+            "project_id": project_id,
+            "view_id": synthesis["view"]["view_id"],
+            "type": thesis_action["type"],
+            "payload": thesis_action["payload"],
+        }},
+    )["result"]["structuredContent"]
+
+    assert thesis["view"] is not None
+    implementations = call(
+        rpc,
+        "tools/call",
+        {"name": "edge_send_message", "arguments": {
+            "project_id": project_id,
+            "message": "compare implementations",
+        }},
+    )["result"]["structuredContent"]
+    select_action = next(
+        action
+        for component in implementations["view"]["components"]
+        for action in component.get("actions", [])
+        if action["type"] == "select_implementation"
+    )
+    selected = call(
+        rpc,
+        "tools/call",
+        {"name": "edge_component_action", "arguments": {
+            "project_id": project_id,
+            "view_id": implementations["view"]["view_id"],
+            "type": select_action["type"],
+            "payload": select_action["payload"],
+        }},
+    )["result"]["structuredContent"]
+
+    assert selected["view"] is not None
+    assert selected["state"]["project_id"] == project_id
+    assert "edge_component_action" in {tool["name"] for tool in call(rpc, "tools/list")["result"]["tools"]}
+    names = {tool["name"] for tool in call(rpc, "tools/list")["result"]["tools"]}
+    assert not {name for name in names if re.search(r"approve|execute|submit_order|kill_switch", name)}
 
 
 def test_a_date_with_no_named_event_says_so(rpc):

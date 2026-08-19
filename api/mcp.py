@@ -85,6 +85,39 @@ TOOL_DESCRIPTORS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "edge_component_action",
+        "capability": Capability.COMPUTE.value,
+        "description": "Run a server-issued research workflow action from an EDGE component. Never authorizes or executes capital.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {"type": "string"},
+                "view_id": {"type": "string"},
+                "type": {"type": "string", "enum": [
+                    "generate_strategies", "synthesize_disclosures", "open_thesis", "select_implementation"
+                ]},
+                "payload": {"type": "object"},
+            },
+            "required": ["project_id", "view_id", "type", "payload"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "edge_create_project",
+        "capability": Capability.DRAFT.value,
+        "description": "Create a strategy research project and return its initial hydrated intake view. No trading authority.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "mandate": {"type": "string"},
+            },
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "edge_get_view",
         "capability": Capability.READ.value,
         "description": "Re-hydrate a previously issued view against current project state.",
@@ -110,6 +143,8 @@ class MCPToolServer:
             "edge_get_project_state": self._get_project_state,
             "edge_record_ui_event": self._record_ui_event,
             "edge_send_message": self._send_message,
+            "edge_component_action": self._component_action,
+            "edge_create_project": self._create_project,
             "edge_get_view": self._get_view,
         }
 
@@ -136,6 +171,14 @@ class MCPToolServer:
 
     def _send_message(self, project_id: str, message: str) -> Dict[str, Any]:
         return self.bridge.send_message(project_id, message)
+
+    def _component_action(self, project_id: str, view_id: str, type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self.bridge.component_action(project_id, view_id, type, payload)
+
+    def _create_project(self, name: str, description: str | None = None, mandate: str | None = None) -> Dict[str, Any]:
+        if not name.strip():
+            raise ValueError("name is required")
+        return self.bridge.create_project(name, description=description, mandate=mandate)
 
     def _get_view(self, project_id: str, view_id: str) -> Dict[str, Any]:
         return {"view": self.bridge.view(project_id, view_id)}

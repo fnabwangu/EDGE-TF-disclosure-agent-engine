@@ -232,6 +232,7 @@ class ChatAgent:
         kind = action.get("type")
         payload = action.get("payload", {})
         mapping = {
+            ActionType.GENERATE_STRATEGIES.value: "generate",
             ActionType.SYNTHESIZE_DISCLOSURES.value: "synthesize",
             ActionType.OPEN_THESIS.value: "open_thesis",
             ActionType.SELECT_IMPLEMENTATION.value: "select_implementation",

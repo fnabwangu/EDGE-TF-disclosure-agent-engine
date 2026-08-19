@@ -29,7 +29,7 @@ WIDGET_MIME = "text/html+skybridge"
 WIDGET_PATH = Path(__file__).resolve().parent.parent / "web" / "edge_panel.html"
 
 # Tools whose result should render as the interactive panel rather than text.
-WIDGET_TOOLS = {"edge_send_message", "edge_get_view", "edge_record_ui_event"}
+WIDGET_TOOLS = {"edge_send_message", "edge_get_view", "edge_record_ui_event", "edge_component_action", "edge_create_project"}
 
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600

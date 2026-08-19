@@ -38,7 +38,9 @@ class ComponentSpec:
 
 
 REGISTRY: Dict[ComponentType, ComponentSpec] = {
-    ComponentType.METRIC: ComponentSpec({"value"}, {ActionType.DRILL_DOWN, ActionType.PIN_TO_WORKBENCH}),
+    ComponentType.METRIC: ComponentSpec(
+        {"value"}, {ActionType.DRILL_DOWN, ActionType.PIN_TO_WORKBENCH, ActionType.GENERATE_STRATEGIES}
+    ),
     ComponentType.TABLE: ComponentSpec({"columns", "rows"}, {ActionType.DRILL_DOWN, ActionType.PIN_TO_WORKBENCH}),
     ComponentType.CHART: ComponentSpec({"series"}, {ActionType.DRILL_DOWN}),
     ComponentType.SIGNAL_CARD: ComponentSpec(

@@ -105,6 +105,19 @@ async def health(request: Request) -> JSONResponse:
 
 @guarded
 async def projects(request: Request) -> JSONResponse:
+    if request.method == "POST":
+        payload = await request.json()
+        name = payload.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("name is required")
+        return JSONResponse(
+            bridge().create_project(
+                name,
+                description=payload.get("description"),
+                mandate=payload.get("mandate"),
+            ),
+            status_code=201,
+        )
     return JSONResponse(bridge().workspace())
 
 
@@ -129,6 +142,19 @@ async def send_message(request: Request) -> JSONResponse:
     if not isinstance(message, str) or not message.strip():
         raise ValueError("message is required")
     return JSONResponse(bridge().send_message(request.path_params["project_id"], message))
+
+
+@guarded
+async def component_action(request: Request) -> JSONResponse:
+    payload = await request.json()
+    return JSONResponse(
+        bridge().component_action(
+            request.path_params["project_id"],
+            payload["view_id"],
+            payload["type"],
+            payload.get("payload") or {},
+        )
+    )
 
 
 @guarded
@@ -165,10 +191,11 @@ routes = [
     Route("/health", health, methods=["GET"]),
     Route("/widget/edge-panel.html", widget, methods=["GET"]),
     Route("/mcp", mcp_rpc, methods=["POST"]),
-    Route("/projects", projects, methods=["GET"]),
+    Route("/projects", projects, methods=["GET", "POST"]),
     Route("/projects/{project_id}/state", project_state, methods=["GET"]),
     Route("/projects/{project_id}/events", record_event, methods=["POST"]),
     Route("/projects/{project_id}/messages", send_message, methods=["POST"]),
+    Route("/projects/{project_id}/actions", component_action, methods=["POST"]),
     Route("/projects/{project_id}/views/{view_id}", get_view, methods=["GET"]),
 ]
 

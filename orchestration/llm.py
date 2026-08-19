@@ -38,7 +38,24 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 TIMEOUT_SECONDS = 20
 CONNECTION_TEST_TIMEOUT_SECONDS = 10
+MODEL_LIST_TIMEOUT_SECONDS = 10
 CONNECTED_MARKER = "EDGE_OPENAI_CONNECTED"
+DEFAULT_OPENAI_MODEL = "gpt-4o"
+
+# Best-to-worst chat-capable families. An id is matched by prefix, so a dated
+# snapshot ("gpt-4o-2024-08-06") still ranks under its family. Anything not
+# matching a known family, or matching an excluded one, is never auto-selected -
+# an account's model list also includes embeddings, TTS, image and moderation
+# models that cannot do intent routing at all.
+PREFERRED_OPENAI_FAMILIES = ("gpt-5", "o3", "o1", "gpt-4.1", "gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5")
+EXCLUDED_MODEL_SUBSTRINGS = (
+    "embedding", "whisper", "tts", "dall-e", "moderation", "davinci", "babbage",
+    "realtime", "audio", "transcribe", "image", "search", "instruct",
+)
+
+# One resolved model per API key per process, so routing a message never
+# triggers a fresh models.list() call - only the first one does.
+_resolved_model_cache: Dict[str, str] = {}
 
 ROUTING_SYSTEM = """You route messages for EDGE-TF, an institutional ETF disclosure engine.
 
@@ -94,13 +111,72 @@ def _placeholder(value: Optional[str]) -> bool:
     return not value or value.startswith("your_") or value.strip() == ""
 
 
+def _family_rank(model_id: str) -> Optional[int]:
+    lower = model_id.lower()
+    if any(bad in lower for bad in EXCLUDED_MODEL_SUBSTRINGS):
+        return None
+    for index, family in enumerate(PREFERRED_OPENAI_FAMILIES):
+        if lower.startswith(family):
+            return index
+    return None
+
+
+def select_best_model(client, *, fallback: str = DEFAULT_OPENAI_MODEL) -> str:
+    """Picks the most capable chat model this API key actually has access to.
+
+    Ranks by family (newest/most capable first), then by the model's own
+    ``created`` timestamp within a family. Never raises: any failure to list
+    models - network, auth, an empty account - falls back to a fixed default.
+    """
+    try:
+        models = list(client.models.list())
+    except Exception:
+        return fallback
+
+    ranked = []
+    for entry in models:
+        rank = _family_rank(entry.id)
+        if rank is not None:
+            ranked.append((rank, -(getattr(entry, "created", 0) or 0), entry.id))
+    if not ranked:
+        return fallback
+    ranked.sort()
+    return ranked[0][2]
+
+
+def resolve_openai_model(api_key: str, *, client: Optional[Any] = None) -> str:
+    """An explicit OPENAI_MODEL always wins; otherwise auto-select and cache it."""
+    ensure_env_loaded()
+    explicit = os.getenv("OPENAI_MODEL")
+    if not _placeholder(explicit):
+        return explicit
+
+    cached = _resolved_model_cache.get(api_key)
+    if cached is not None:
+        return cached
+
+    if openai_sdk is None:
+        return DEFAULT_OPENAI_MODEL
+    try:
+        resolved_client = client or openai_sdk.OpenAI(api_key=api_key)
+        chosen = select_best_model(resolved_client)
+    except Exception:
+        chosen = DEFAULT_OPENAI_MODEL
+    _resolved_model_cache[api_key] = chosen
+    return chosen
+
+
+def reset_model_cache() -> None:
+    _resolved_model_cache.clear()
+
+
 def resolve_config() -> Optional[ModelConfig]:
     """OPENAI_API_KEY is read here and nowhere else in the codebase."""
     ensure_env_loaded()
 
     openai_key = os.getenv("OPENAI_API_KEY")
     if not _placeholder(openai_key):
-        return ModelConfig("openai", os.getenv("OPENAI_MODEL", "gpt-4o"), openai_key)
+        return ModelConfig("openai", resolve_openai_model(openai_key), openai_key)
 
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     if not _placeholder(anthropic_key):
@@ -136,7 +212,7 @@ def test_openai_connection(*, model: Optional[str] = None) -> str:
     client = openai_sdk.OpenAI(api_key=api_key)
     try:
         response = client.responses.create(
-            model=model or os.getenv("OPENAI_MODEL", "gpt-4o"),
+            model=model or resolve_openai_model(api_key, client=client),
             input="Reply with the single word: ok",
             max_output_tokens=16,
             timeout=CONNECTION_TEST_TIMEOUT_SECONDS,
@@ -243,17 +319,26 @@ def build_language_model() -> Optional[HostedLanguageModel]:
 
 def model_status() -> str:
     config = resolve_config()
-    return config.label if config else "keyword router (no API key configured)"
+    if config is None:
+        return "keyword router (no API key configured)"
+    if config.provider == "openai" and _placeholder(os.getenv("OPENAI_MODEL")):
+        return f"{config.label} (auto-selected)"
+    return config.label
 
 
 __all__ = [
     "CONNECTED_MARKER",
+    "DEFAULT_OPENAI_MODEL",
     "HostedLanguageModel",
     "ModelConfig",
+    "PREFERRED_OPENAI_FAMILIES",
     "ROUTING_SYSTEM",
     "build_language_model",
     "model_status",
     "openai_configured",
+    "reset_model_cache",
     "resolve_config",
+    "resolve_openai_model",
+    "select_best_model",
     "test_openai_connection",
 ]

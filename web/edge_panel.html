@@ -46,6 +46,9 @@
   ul { margin: 4px 0; padding-left: 18px; }
   .warn { color: #c0392b; }
   .provenance { font-size: 11px; opacity: .55; margin-top: 6px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .actions button { padding: 6px 10px; border: 1px solid rgba(128,128,128,.42); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+  .action-status { margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -79,6 +82,8 @@ const Http = {
     if (!Http.base) throw new Error("No host API and no __EDGE_API__ configured");
     const routes = {
       edge_record_ui_event: [`/projects/${args.project_id}/events`, "POST"],
+      edge_component_action: [`/projects/${args.project_id}/actions`, "POST"],
+      edge_create_project: ["/projects", "POST"],
       edge_send_message: [`/projects/${args.project_id}/messages`, "POST"],
       edge_get_project_state: [`/projects/${args.project_id}/state`, "GET"],
       edge_get_view: [`/projects/${args.project_id}/views/${args.view_id}`, "GET"],
@@ -118,6 +123,16 @@ function fieldValue(view, fieldId) {
   return entry && entry.value !== null && entry.value !== undefined ? entry.value : "";
 }
 
+function adoptResult(result) {
+  const next = result && result.structuredContent ? result.structuredContent : result;
+  if (!next) return;
+  // Keep the old view when a successful state write did not invalidate it.
+  payload = { ...(payload || {}), ...next };
+  if (next.refreshed && next.refreshed.length && next.refreshed[0].view) {
+    payload.view = next.refreshed[next.refreshed.length - 1].view;
+  }
+}
+
 /* ------------------------------------------------------------------ writing */
 
 async function onFieldChange(view, spec, rawValue) {
@@ -136,10 +151,26 @@ async function onFieldChange(view, spec, rawValue) {
       persistence: spec.persistence || "PROJECT",
       event_id: `${view.view_id}:${spec.field_id}:${Date.now()}`,
     });
-    payload = result && result.structuredContent ? result.structuredContent : result;
+    adoptResult(result);
     render();
   } catch (error) {
     if (status) status.textContent = `not saved: ${error.message}`;
+  }
+}
+
+async function onAction(view, action, status) {
+  if (status) status.textContent = "working...";
+  try {
+    const result = await Host.callTool("edge_component_action", {
+      project_id: projectId(),
+      view_id: view.view_id,
+      type: action.type,
+      payload: action.payload || {},
+    });
+    adoptResult(result);
+    render();
+  } catch (error) {
+    if (status) status.textContent = `not completed: ${error.message}`;
   }
 }
 
@@ -251,6 +282,17 @@ function renderComponent(view, component) {
   panel.appendChild(el("h3", { text: component.title }));
   panel.appendChild(renderComponentBody(component));
   (component.fields || []).forEach((spec) => panel.appendChild(renderField(view, spec)));
+  if (component.actions && component.actions.length) {
+    const actions = el("div", { class: "actions" });
+    const status = el("div", { class: "muted action-status" });
+    component.actions.forEach((action) => {
+      const button = el("button", { type: "button", text: action.label });
+      button.addEventListener("click", () => onAction(view, action, status));
+      actions.appendChild(button);
+    });
+    panel.appendChild(actions);
+    panel.appendChild(status);
+  }
   if (component.provenance && component.provenance.length) {
     panel.appendChild(el("div", { class: "provenance", text: `source: ${component.provenance.join(", ")}` }));
   }
