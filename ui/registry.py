@@ -101,6 +101,11 @@ REGISTRY: Dict[ComponentType, ComponentSpec] = {
         {ActionType.SYNTHESIZE_DISCLOSURES, ActionType.DRILL_DOWN, ActionType.PIN_TO_WORKBENCH},
         requires_provenance=True,
     ),
+    ComponentType.IMPLEMENTATION_CANDIDATES: ComponentSpec(
+        {"columns", "rows"},
+        {ActionType.SELECT_IMPLEMENTATION, ActionType.DRILL_DOWN},
+        requires_provenance=True,
+    ),
     ComponentType.AUDIT_TRAIL: ComponentSpec({"entries"}, set(), True),
     ComponentType.THESIS_TIMELINE: ComponentSpec({"events"}, {ActionType.OPEN_EVIDENCE, ActionType.DRILL_DOWN}, True),
     ComponentType.STATE_DIFF: ComponentSpec({"changes"}, {ActionType.OPEN_EVIDENCE}),

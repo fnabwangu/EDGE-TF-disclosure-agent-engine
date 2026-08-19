@@ -92,6 +92,55 @@ def strategy_candidates(candidates: Sequence[StrategyCandidate], *, query: Optio
     )
 
 
+def implementation_candidates(candidates: Sequence[Any], *, strategy_id: str) -> UIComponent:
+    """Every eligible expression, side by side. Selecting one is the only way forward."""
+    rows = [
+        {
+            "id": c.id,
+            "type": c.type.value,
+            "instruments": ", ".join(i.ticker for i in c.instruments) or "-",
+            "thesis_fit": c.thesis_fit,
+            "expected_return": c.expected_return,
+            "downside_risk": c.downside_risk,
+            "convexity": c.convexity,
+            "carry_cost": c.carry_cost,
+            "liquidity": c.liquidity_score,
+            "concentration": c.concentration_score,
+            "risk_adjusted_score": c.risk_adjusted_score,
+            "rationale": c.rationale,
+        }
+        for c in candidates
+    ]
+    return UIComponent(
+        type=ComponentType.IMPLEMENTATION_CANDIDATES,
+        title="Candidate implementations",
+        data={
+            "columns": [
+                "type",
+                "instruments",
+                "thesis_fit",
+                "expected_return",
+                "downside_risk",
+                "convexity",
+                "carry_cost",
+                "liquidity",
+                "concentration",
+                "risk_adjusted_score",
+            ],
+            "rows": rows,
+        },
+        actions=[
+            UIAction(
+                type=ActionType.SELECT_IMPLEMENTATION,
+                label=f"Select {c.type.value}",
+                payload={"strategy_id": strategy_id, "implementation_id": c.id},
+            )
+            for c in candidates
+        ],
+        provenance=["ImplementationGenerator", "BlackScholesEngine", "config/fund_universe.json"],
+    )
+
+
 def iav_gauge(security: SecuritySynthesis) -> UIComponent:
     return UIComponent(
         type=ComponentType.IAV_GAUGE,
@@ -284,6 +333,23 @@ def synthesis_view(
     return view
 
 
+def implementations_view(
+    candidates: Sequence[Any], *, strategy_id: str, project_id: Optional[str] = None
+) -> GenerativeView:
+    """The side-by-side comparison. Nothing here decides which candidate wins."""
+    view = new_view(
+        "Implementation generation",
+        summary=(
+            f"{len(candidates)} eligible expressions generated for {strategy_id}, including the "
+            "null option. Select one to size it."
+        ),
+        project_id=project_id,
+        tool_calls=["generate_implementations"],
+    )
+    view.components.append(implementation_candidates(candidates, strategy_id=strategy_id))
+    return view
+
+
 def strategy_view(
     candidates: Sequence[StrategyCandidate],
     *,
@@ -441,7 +507,9 @@ __all__ = [
     "evidence_cards",
     "funnel_rail",
     "iav_gauge",
+    "implementation_candidates",
     "implementation_comparison",
+    "implementations_view",
     "manager_breadth",
     "new_view",
     "signal_card",

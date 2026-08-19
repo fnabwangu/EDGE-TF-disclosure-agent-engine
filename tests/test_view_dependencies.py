@@ -120,9 +120,14 @@ def test_every_live_view_fed_by_a_field_is_refreshed(agent):
 
 def test_implicit_dependencies_refresh_views_with_no_such_control(agent):
     """A trade preview reads max_loss without drawing a box for it."""
+    strategy_id = "power_infrastructure:uranium_mining"
     agent.send("find strategies about nuclear power")
     agent.send("synthesize uranium mining")
     agent.send("open a thesis on this")
+    chosen = next(c for c in agent.funnel.generate_implementations(strategy_id) if c.type.value != "NO_TRADE")
+    agent.act(
+        {"type": "select_implementation", "payload": {"strategy_id": strategy_id, "implementation_id": chosen.id}}
+    )
     trade = agent.send("design a trade for it")
     assert trade.view is not None
 
@@ -135,9 +140,14 @@ def test_implicit_dependencies_refresh_views_with_no_such_control(agent):
 
 
 def test_an_entered_max_loss_reaches_the_drafted_intent(agent):
+    strategy_id = "power_infrastructure:uranium_mining"
     agent.send("find strategies about nuclear power")
     agent.send("synthesize uranium mining")
     agent.send("open a thesis on this")
+    chosen = next(c for c in agent.funnel.generate_implementations(strategy_id) if c.type.value != "NO_TRADE")
+    agent.act(
+        {"type": "select_implementation", "payload": {"strategy_id": strategy_id, "implementation_id": chosen.id}}
+    )
     change(agent, "max_loss", 25_000)
 
     agent.send("design a trade for it")

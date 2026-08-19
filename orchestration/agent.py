@@ -46,6 +46,8 @@ IMPLICIT_DEPENDENCIES: Dict[str, FrozenSet[str]] = {
     "design_trade": frozenset(
         {"max_loss", "invalidation_condition", "execution_buffer_days", "base_allocation"}
     ),
+    "generate_implementations": frozenset(),
+    "select_implementation": frozenset(),
     "open_thesis": frozenset({"invalidation_condition"}),
     "inbox": frozenset(),
     "continuity": frozenset(),
@@ -109,6 +111,7 @@ class KeywordRouter:
         ("inbox", r"\b(inbox|waiting on me|pending|approvals?)\b"),
         ("board", r"\b(pipeline|funnel|board|stages?)\b"),
         ("synthesize", r"\b(synth|synthesi[sz]e|disclosures?|holdings|analy[sz]e|dig into)\b"),
+        ("generate_implementations", r"\b(implementation|expression)s?\b.*\b(generat|compar|options?|alternativ|side.by.side)\b|\b(compare|show)\b.*\bimplementations?\b"),
         ("design_trade", r"\b(size it|design a trade|implement|position it)\b"),
         ("open_thesis", r"\b(open a thesis|start a thesis|track this|save this)\b"),
         ("generate", r"\b(strateg|idea|theme|find|show me|explore|screen|research)\b"),
@@ -136,6 +139,8 @@ class ChatAgent:
         "generate",
         "synthesize",
         "open_thesis",
+        "generate_implementations",
+        "select_implementation",
         "design_trade",
         "catalyst",
         "proceed",
@@ -223,6 +228,7 @@ class ChatAgent:
         mapping = {
             ActionType.SYNTHESIZE_DISCLOSURES.value: "synthesize",
             ActionType.OPEN_THESIS.value: "open_thesis",
+            ActionType.SELECT_IMPLEMENTATION.value: "select_implementation",
             ActionType.DRAFT_INTENT.value: "design_trade",
         }
         if kind not in mapping:
@@ -480,7 +486,9 @@ class ChatAgent:
                 description="Adoption velocity collapse",
             ).model_dump(mode="json"),
         )
-        self.funnel.mark(strategy_id, FunnelStage.TRADE_DESIGN, thesis_id=thesis.thesis_id)
+        # thesis_id is recorded now; the stage advances through implementation
+        # generation and selection rather than jumping straight to sizing.
+        self.funnel.mark(strategy_id, FunnelStage.EVIDENCE_REVIEW, thesis_id=thesis.thesis_id)
 
         view = compose.new_view(
             f"Thesis opened - {thesis.title}", project_id=self.project_id, tool_calls=["create_thesis"]
@@ -494,7 +502,8 @@ class ChatAgent:
         return AgentTurn(
             reply=(
                 f"Opened **{thesis.title}** with {len(security.evidence())} pieces of evidence and a standing "
-                f"watch condition: IAV below {floor} demotes it automatically, in this session or any later one."
+                f"watch condition: IAV below {floor} demotes it automatically, in this session or any later one. "
+                "Next: generate implementations to see every eligible way to express this."
             ),
             view=view,
             tool_calls=["create_thesis", "record_evidence", "set_watch_condition"],
@@ -531,11 +540,29 @@ class ChatAgent:
                 )
             )
 
+        chosen = self.funnel.selected_implementation(strategy_id)
+        if chosen is None:
+            # Never pick an implementation silently: generate every eligible one first.
+            return self._do_generate_implementations(strategy_id=strategy_id)
+
+        if chosen.type.value == "NO_TRADE":
+            return AgentTurn(
+                reply=f"**NO_TRADE** is selected for {strategy_id}: {chosen.rationale} No capital is committed."
+            )
+        if chosen.type.value == "OPTIONS":
+            return AgentTurn(
+                reply=(
+                    "OPTIONS was selected, but sizing an option leg needs a catalyst date and expiration, "
+                    "which this handler does not yet collect. Pick a different implementation, or give me "
+                    "the dated catalyst and I will route it through the catalyst path instead."
+                )
+            )
+        if not chosen.instruments:
+            return AgentTurn(reply=f"{chosen.type.value} has no instrument to size for {strategy_id}.")
+
         candidate = self.funnel.candidate(strategy_id)
         security = synthesis.leader()
-        ticker = ticker or (candidate.implementation_tickers[0] if candidate.implementation_tickers else None)
-        if ticker is None:
-            return AgentTurn(reply="No implementation vehicle exists for this strategy.")
+        ticker = ticker or chosen.instruments[0].ticker
 
         nav = self.transactions.portfolio.snapshot().nav
         leverage = float(security.conviction.requested_leverage)
@@ -562,7 +589,9 @@ class ChatAgent:
             exit_plan="Scale out at both targets; exit in full on invalidation or watch-condition breach.",
             rationale=(
                 f"{security.manager_breadth} independent clusters, active deviation {security.aqd_pct:+.2%}, "
-                f"IAV {security.iav.composite_score:+.3f} ({security.conviction.quality_tier})."
+                f"IAV {security.iav.composite_score:+.3f} ({security.conviction.quality_tier}). "
+                f"Implementation: {chosen.type.value}, risk-adjusted score {chosen.risk_adjusted_score:.3f} "
+                f"among {len(self.funnel.implementations(strategy_id))} generated alternatives."
             ),
             generated_by="EDGE_TF",
         )
@@ -605,6 +634,66 @@ class ChatAgent:
             tool_calls=["draft_trade_intent", "request_preview"],
         )
 
+    def _do_generate_implementations(self, query: str = "", strategy_id: Optional[str] = None) -> AgentTurn:
+        """Every eligible vehicle, published side by side. Nothing here decides for you."""
+        strategy_id = strategy_id or self._resolve_strategy(query) or self.focus_strategy_id
+        synthesis = self.funnel.synthesis(strategy_id) if strategy_id else None
+        if synthesis is None or not synthesis.usable:
+            return AgentTurn(
+                reply="Synthesize the disclosures first - implementations are generated from measured evidence."
+            )
+
+        position = self.funnel.positions.get(strategy_id)
+        if position is None or position.thesis_id is None:
+            return AgentTurn(
+                reply=(
+                    f"**{strategy_id}** has no thesis yet. Open a thesis before generating implementations - "
+                    "no position exists without a recorded reason."
+                )
+            )
+
+        candidates = self.funnel.generate_implementations(strategy_id)
+        self.focus_strategy_id = strategy_id
+        view = compose.implementations_view(candidates, strategy_id=strategy_id, project_id=self.project_id)
+
+        types = ", ".join(sorted({c.type.value for c in candidates}))
+        top = candidates[0]
+        return AgentTurn(
+            reply=(
+                f"{len(candidates)} eligible expressions generated side by side: {types}. "
+                f"Best risk-adjusted so far is **{top.type.value}** ({top.summary()}) at "
+                f"{top.risk_adjusted_score:.3f}. Select one to size it - nothing is committed yet."
+            ),
+            view=view,
+            tool_calls=["generate_implementations"],
+        )
+
+    def _do_select_implementation(
+        self, strategy_id: Optional[str] = None, implementation_id: Optional[str] = None, query: str = ""
+    ) -> AgentTurn:
+        strategy_id = strategy_id or self._resolve_strategy(query) or self.focus_strategy_id
+        if strategy_id is None:
+            return AgentTurn(reply="Which strategy? Generate implementations for one first.")
+        if implementation_id is None:
+            return AgentTurn(reply=f"Which implementation for {strategy_id}? Name one of the generated candidates.")
+
+        from research.funnel import SelectionBeforeGeneration
+
+        try:
+            chosen = self.funnel.select_implementation(strategy_id, implementation_id)
+        except SelectionBeforeGeneration:
+            # The set never existed: generate it rather than refuse.
+            return self._do_generate_implementations(strategy_id=strategy_id)
+        except KeyError:
+            return AgentTurn(
+                reply=f"'{implementation_id}' is not one of the generated candidates for {strategy_id}."
+            )
+
+        self.focus_strategy_id = strategy_id
+        if chosen.type.value == "NO_TRADE":
+            return AgentTurn(reply=f"Selected **NO_TRADE**: {chosen.rationale} No capital is committed.")
+        return self._do_design_trade(strategy_id=strategy_id)
+
     def _design_catalyst_trade(self, strategy_id: str, ticker: Optional[str]) -> AgentTurn:
         strategy = self.catalysts.get(strategy_id)
         if strategy is None:
@@ -643,7 +732,10 @@ class ChatAgent:
 
         with_thesis = [s for s, p in self.funnel.positions.items() if p.thesis_id]
         if with_thesis:
-            return self._do_design_trade(strategy_id=with_thesis[0])
+            strategy_id = with_thesis[0]
+            if self.funnel.selected_implementation(strategy_id) is None:
+                return self._do_generate_implementations(strategy_id=strategy_id)
+            return self._do_design_trade(strategy_id=strategy_id)
 
         synthesized = list(self.funnel._synthesis)
         if synthesized:

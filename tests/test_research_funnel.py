@@ -166,27 +166,49 @@ def test_router_maps_phrases_to_intents():
 
 
 def test_conversation_walks_the_whole_funnel(agent):
+    strategy_id = "power_infrastructure:uranium_mining"
     agent.send("find strategies about nuclear power")
     agent.send("synthesize uranium mining")
     thesis_turn = agent.send("open a thesis on this")
-    trade_turn = agent.send("design a trade for it")
+    impl_turn = agent.send("compare implementations")
 
     assert "Opened" in thesis_turn.reply
+    assert "eligible expressions generated" in impl_turn.reply
+    assert agent.funnel.positions[strategy_id].stage is FunnelStage.IMPLEMENTATION_GENERATION
+
+    chosen = next(c for c in agent.funnel.implementations(strategy_id) if c.type.value != "NO_TRADE")
+    agent.act(
+        {"type": "select_implementation", "payload": {"strategy_id": strategy_id, "implementation_id": chosen.id}}
+    )
+    trade_turn = agent.send("design a trade for it")
+
     assert "needs your approval" in trade_turn.reply
 
-    position = agent.funnel.positions["power_infrastructure:uranium_mining"]
+    position = agent.funnel.positions[strategy_id]
     assert position.stage is FunnelStage.APPROVAL
-    assert position.thesis_id and position.intent_id
+    assert position.thesis_id and position.intent_id and position.implementation_id == chosen.id
 
 
 def test_every_generated_view_passes_the_ui_contract(agent):
+    strategy_id = "power_infrastructure:uranium_mining"
     for message in [
         "find strategies about nuclear power",
         "synthesize uranium mining",
         "open a thesis on this",
-        "design a trade for it",
-        "what is waiting on me",
+        "compare implementations",
     ]:
+        turn = agent.send(message)
+        if turn.view is None:
+            continue
+        hashes = {r.preview.intent_hash for r in agent.transactions.records() if r.preview}
+        validate_view(turn.view, authorized_hashes=hashes)
+
+    chosen = next(c for c in agent.funnel.implementations(strategy_id) if c.type.value != "NO_TRADE")
+    agent.act(
+        {"type": "select_implementation", "payload": {"strategy_id": strategy_id, "implementation_id": chosen.id}}
+    )
+
+    for message in ["design a trade for it", "what is waiting on me"]:
         turn = agent.send(message)
         if turn.view is None:
             continue
@@ -215,6 +237,19 @@ def test_a_trade_cannot_be_designed_without_a_thesis(agent):
     assert "no thesis" in turn.reply
 
 
+def test_design_trade_generates_implementations_instead_of_picking_one(agent):
+    """The original bug: advancing straight to a single implementation."""
+    strategy_id = "power_infrastructure:uranium_mining"
+    agent.send("find strategies about nuclear power")
+    agent.send("synthesize uranium mining")
+    agent.send("open a thesis on this")
+
+    turn = agent.send("design a trade for it")
+    assert "eligible expressions generated side by side" in turn.reply
+    assert agent.funnel.selected_implementation(strategy_id) is None
+    assert agent.transactions.records() == []
+
+
 def test_opening_a_thesis_records_evidence_and_a_watch_condition(agent):
     agent.send("find strategies about nuclear power")
     agent.send("synthesize uranium mining")
@@ -238,9 +273,14 @@ def test_a_button_click_runs_the_same_handler_as_a_sentence(agent):
 
 
 def test_the_agent_never_approves_its_own_trade(agent):
+    strategy_id = "power_infrastructure:uranium_mining"
     agent.send("find strategies about nuclear power")
     agent.send("synthesize uranium mining")
     agent.send("open a thesis on this")
+    chosen = next(c for c in agent.funnel.generate_implementations(strategy_id) if c.type.value != "NO_TRADE")
+    agent.act(
+        {"type": "select_implementation", "payload": {"strategy_id": strategy_id, "implementation_id": chosen.id}}
+    )
     agent.send("design a trade for it")
 
     record = agent.transactions.records()[-1]

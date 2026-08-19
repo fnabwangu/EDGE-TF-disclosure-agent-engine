@@ -48,7 +48,13 @@ Intents:
 - generate        args: {"query": "<the theme or subject>"}   find strategy candidates
 - synthesize      args: {"query": "..."} or {"strategy_id": "theme:function"}  run disclosure synthesis
 - open_thesis     args: {"query": "..."}   make the current idea durable
-- design_trade    args: {"query": "..."}   size and price an implementation
+- generate_implementations
+                  args: {"query": "..."} or {"strategy_id": "theme:function"}
+                  generate every eligible way to express a confirmed thesis, side by side
+- select_implementation
+                  args: {"strategy_id": "theme:function", "implementation_id": "..."}
+                  choose one of the already-generated candidates - never invent an id
+- design_trade    args: {"query": "..."}   size and price the selected implementation
 - catalyst        args: {"query": "...", "stance": "HAWKISH|DOVISH|VOLATILITY"}  a DATED macro event
                   (FOMC, Jackson Hole, CPI, payrolls, elections) rather than an adoption theme
 - proceed         args: {}   a bare continuation such as "go", "continue", "do it" - resume from
@@ -59,6 +65,8 @@ Intents:
 - help            args: {}
 
 Rules:
+- Never jump straight to design_trade from a thesis. Implementations must be generated and one
+  selected first; if unsure whether they have been, prefer generate_implementations.
 - A dated macro or policy event is ALWAYS "catalyst", never "generate".
 - Preserve the user's subject wording verbatim in args.query.
 - Never invent tickers, prices or scores. You only choose an intent.

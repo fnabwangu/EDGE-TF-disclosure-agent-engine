@@ -45,6 +45,7 @@ class ComponentType(str, Enum):
     CONTINUITY_BRIEF = "continuity_brief"
     FUNNEL_RAIL = "funnel_rail"
     STRATEGY_CANDIDATES = "strategy_candidates"
+    IMPLEMENTATION_CANDIDATES = "implementation_candidates"
     AUDIT_TRAIL = "audit_trail"
     THESIS_TIMELINE = "thesis_timeline"
     STATE_DIFF = "state_diff"
@@ -68,6 +69,7 @@ class ActionType(str, Enum):
     RESUME_THREAD = "resume_thread"
     SYNTHESIZE_DISCLOSURES = "synthesize_disclosures"
     OPEN_THESIS = "open_thesis"
+    SELECT_IMPLEMENTATION = "select_implementation"
 
 
 class UIAction(BaseModel):

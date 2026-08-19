@@ -295,6 +295,21 @@ def _render_strategy_candidates(component: UIComponent, key: str) -> Optional[Di
     return _render_actions(component, key)
 
 
+def _render_implementation_candidates(component: UIComponent, key: str) -> Optional[Dict[str, Any]]:
+    """Every eligible expression, side by side - selecting is the only way forward."""
+    rows = component.data.get("rows", [])
+    st.markdown(f"**{component.title}**")
+    if rows:
+        ranked = sorted(rows, key=lambda r: -(r.get("risk_adjusted_score") or 0))
+        st.caption(f"Best risk-adjusted: **{ranked[0]['type']}** ({ranked[0]['risk_adjusted_score']:.3f})")
+    st.dataframe(
+        pd.DataFrame(rows, columns=component.data.get("columns")),
+        use_container_width=True,
+        hide_index=True,
+    )
+    return _render_actions(component, key)
+
+
 def _render_iav_gauge(component: UIComponent, key: str) -> Optional[Dict[str, Any]]:
     data = component.data
     st.markdown(f"**{component.title}**")
@@ -377,6 +392,7 @@ _HANDLERS = {
     ComponentType.AUDIT_TRAIL: _render_audit,
     ComponentType.FUNNEL_RAIL: _render_funnel_rail,
     ComponentType.STRATEGY_CANDIDATES: _render_strategy_candidates,
+    ComponentType.IMPLEMENTATION_CANDIDATES: _render_implementation_candidates,
     ComponentType.IAV_GAUGE: _render_iav_gauge,
     ComponentType.MANAGER_BREADTH_GRAPH: _render_breadth_graph,
     ComponentType.EVIDENCE_CARD: _render_evidence,
