@@ -239,12 +239,32 @@ def expand(query: str) -> ConceptMatch:
     return match
 
 
+CONCEPTS_BY_KEY: Dict[str, Concept] = {concept.key: concept for concept in CONCEPTS}
+
+
+def from_keys(keys: Iterable[str], *, stance: Stance = Stance.UNSPECIFIED, query: str = "") -> ConceptMatch:
+    """Rebuild a match from persisted concept keys, so focus survives a new session."""
+    match = ConceptMatch(query=query, stance=stance)
+    for key in keys:
+        concept = CONCEPTS_BY_KEY.get(key)
+        if concept is None:
+            continue
+        match.concepts.append(concept)
+        match.functions.update(concept.functions)
+        match.themes.update(concept.themes)
+    if match.kind is TradeKind.MACRO_EVENT and match.stance is Stance.UNSPECIFIED:
+        match.stance = Stance.VOLATILITY
+    return match
+
+
 __all__ = [
     "CONCEPTS",
+    "CONCEPTS_BY_KEY",
     "Concept",
     "ConceptMatch",
     "Stance",
     "TradeKind",
     "detect_stance",
     "expand",
+    "from_keys",
 ]

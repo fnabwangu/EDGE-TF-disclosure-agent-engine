@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<!--
+  EDGE panel - chat-host component.
+
+  Path: web/edge_panel.html
+
+  Renders a GenerativeView and writes every interaction back to EDGE. The rule
+  it exists to enforce:
+
+      Never create a control carrying a semantic value that exists only in
+      browser memory.
+
+  Controls are hydrated from `view.state`, and a change calls
+  `edge_record_ui_event` before it can affect anything, so the value survives
+  this component being replaced and is visible to the model on the next turn.
+
+  The host API is feature-detected. Outside a chat host (a plain page, a test)
+  it falls back to the HTTP transport, so the same component is debuggable
+  standalone.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0; padding: 12px;
+  }
+  .panel { border: 1px solid rgba(128,128,128,.32); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .panel h3 { margin: 0 0 6px; font-size: 14px; }
+  .muted { opacity: .68; font-size: 12px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0; }
+  .metric { min-width: 108px; }
+  .metric .value { font-size: 20px; font-weight: 620; }
+  .field { margin: 8px 0; }
+  .field label { display: block; font-size: 12px; margin-bottom: 3px; }
+  .field input, .field select {
+    width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid rgba(128,128,128,.42); background: transparent; color: inherit;
+  }
+  .required { color: #c0392b; font-size: 11px; }
+  .saved { color: #1e8e3e; font-size: 11px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(128,128,128,.22); }
+  ul { margin: 4px 0; padding-left: 18px; }
+  .warn { color: #c0392b; }
+  .provenance { font-size: 11px; opacity: .55; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+"use strict";
+
+const root = document.getElementById("root");
+
+/* ---------------------------------------------------------------- transport */
+
+const Host = {
+  available() {
+    return typeof window.openai !== "undefined" && typeof window.openai.callTool === "function";
+  },
+  toolOutput() {
+    return (window.openai && window.openai.toolOutput) || window.__EDGE_FIXTURE__ || null;
+  },
+  async callTool(name, args) {
+    if (Host.available()) return window.openai.callTool(name, args);
+    return Http.callTool(name, args);
+  },
+};
+
+/* Standalone fallback so the component is debuggable outside a chat host. */
+const Http = {
+  base: (window.__EDGE_API__ && window.__EDGE_API__.base) || "",
+  token: (window.__EDGE_API__ && window.__EDGE_API__.token) || "",
+  async callTool(name, args) {
+    if (!Http.base) throw new Error("No host API and no __EDGE_API__ configured");
+    const routes = {
+      edge_record_ui_event: [`/projects/${args.project_id}/events`, "POST"],
+      edge_send_message: [`/projects/${args.project_id}/messages`, "POST"],
+      edge_get_project_state: [`/projects/${args.project_id}/state`, "GET"],
+      edge_get_view: [`/projects/${args.project_id}/views/${args.view_id}`, "GET"],
+    };
+    const route = routes[name];
+    if (!route) throw new Error(`Unsupported tool ${name}`);
+    const [path, method] = route;
+    const response = await fetch(Http.base + path, {
+      method,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${Http.token}` },
+      body: method === "POST" ? JSON.stringify(args) : undefined,
+    });
+    if (!response.ok) throw new Error(`${name} failed: ${response.status}`);
+    return response.json();
+  },
+};
+
+/* -------------------------------------------------------------------- state */
+
+let payload = Host.toolOutput();
+
+function currentView() {
+  if (!payload) return null;
+  if (payload.refreshed && payload.refreshed.length && payload.refreshed[0].view) {
+    return payload.refreshed[0].view;
+  }
+  return payload.view || null;
+}
+
+function projectId() {
+  if (!payload) return "";
+  return (payload.state && payload.state.project_id) || payload.project_id || "";
+}
+
+function fieldValue(view, fieldId) {
+  const entry = view.state && view.state[fieldId];
+  return entry && entry.value !== null && entry.value !== undefined ? entry.value : "";
+}
+
+/* ------------------------------------------------------------------ writing */
+
+async function onFieldChange(view, spec, rawValue) {
+  const value = rawValue === "" ? null : rawValue;
+  const status = document.getElementById(`status-${spec.field_id}`);
+  if (status) status.textContent = "saving...";
+
+  try {
+    // Persist before anything renders from it: EDGE is the source of truth.
+    const result = await Host.callTool("edge_record_ui_event", {
+      project_id: projectId(),
+      view_id: view.view_id,
+      event_type: "FIELD_CHANGED",
+      field_id: spec.field_id,
+      value: value,
+      persistence: spec.persistence || "PROJECT",
+      event_id: `${view.view_id}:${spec.field_id}:${Date.now()}`,
+    });
+    payload = result && result.structuredContent ? result.structuredContent : result;
+    render();
+  } catch (error) {
+    if (status) status.textContent = `not saved: ${error.message}`;
+  }
+}
+
+/* ----------------------------------------------------------------- rendering */
+
+function el(tag, attrs, children) {
+  const node = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    if (key === "text") node.textContent = value;
+    else if (key === "class") node.className = value;
+    else node.setAttribute(key, value);
+  });
+  (children || []).forEach((child) => node.appendChild(child));
+  return node;
+}
+
+function renderField(view, spec) {
+  const wrapper = el("div", { class: "field" });
+  wrapper.appendChild(el("label", { text: spec.label, for: `f-${spec.field_id}` }));
+
+  const value = fieldValue(view, spec.field_id);
+  let input;
+  if (spec.kind === "CHOICE") {
+    input = el("select", { id: `f-${spec.field_id}` });
+    (spec.options || []).forEach((option) => {
+      const node = el("option", { value: option, text: option });
+      if (option === value) node.selected = true;
+      input.appendChild(node);
+    });
+  } else {
+    const type = spec.kind === "DATE" ? "date" : spec.kind === "NUMBER" ? "number" : "text";
+    input = el("input", { id: `f-${spec.field_id}`, type: type });
+    input.value = value === null ? "" : value;
+  }
+  input.addEventListener("change", (event) => onFieldChange(view, spec, event.target.value));
+  wrapper.appendChild(input);
+
+  const status = el("div", { id: `status-${spec.field_id}` });
+  if (value !== "" && value !== null) {
+    status.className = "saved";
+    status.textContent = "saved to project state";
+  } else if (spec.required) {
+    status.className = "required";
+    status.textContent = "required";
+  }
+  wrapper.appendChild(status);
+  return wrapper;
+}
+
+function renderTable(rows) {
+  if (!rows || !rows.length) return el("div", { class: "muted", text: "No rows." });
+  const columns = Object.keys(rows[0]);
+  const head = el("tr", {}, columns.map((c) => el("th", { text: c })));
+  const body = rows.slice(0, 12).map((row) =>
+    el("tr", {}, columns.map((c) => el("td", { text: String(row[c] ?? "") })))
+  );
+  return el("table", {}, [el("thead", {}, [head]), el("tbody", {}, body)]);
+}
+
+function renderComponentBody(component) {
+  const data = component.data || {};
+  switch (component.type) {
+    case "iav_gauge":
+      return el("div", { class: "row" }, [
+        el("div", { class: "metric" }, [
+          el("div", { class: "muted", text: "IAV" }),
+          el("div", { class: "value", text: Number(data.value).toFixed(3) }),
+        ]),
+        el("div", { class: "metric" }, [
+          el("div", { class: "muted", text: "State" }),
+          el("div", { class: "value", text: data.state || "-" }),
+        ]),
+        el("div", { class: "metric" }, [
+          el("div", { class: "muted", text: "Leverage" }),
+          el("div", { class: "value", text: `${data.requested_leverage ?? "-"}x` }),
+        ]),
+      ]);
+    case "metric":
+      return el("div", { class: "metric" }, [el("div", { class: "value", text: String(data.value) })]);
+    case "table":
+    case "holdings_delta_table":
+    case "strategy_candidates":
+      return renderTable(data.rows);
+    case "etf_implementation_comparison":
+      return renderTable(data.candidates);
+    case "risk_budget_panel":
+      return renderTable(data.budgets);
+    case "counter_thesis_panel":
+      return el(
+        "ul",
+        { class: "warn" },
+        (data.counter_claims || []).map((claim) => el("li", { text: claim.claim }))
+      );
+    case "evidence_card":
+      return el("div", { text: data.claim || "" });
+    case "approval_inbox":
+      return el(
+        "ul",
+        {},
+        (data.items || []).map((item) => el("li", { text: `${item.item_type}: ${item.title}` }))
+      );
+    default:
+      return el("div", { class: "muted", text: component.type });
+  }
+}
+
+function renderComponent(view, component) {
+  const panel = el("div", { class: "panel" });
+  panel.appendChild(el("h3", { text: component.title }));
+  panel.appendChild(renderComponentBody(component));
+  (component.fields || []).forEach((spec) => panel.appendChild(renderField(view, spec)));
+  if (component.provenance && component.provenance.length) {
+    panel.appendChild(el("div", { class: "provenance", text: `source: ${component.provenance.join(", ")}` }));
+  }
+  return panel;
+}
+
+function render() {
+  root.textContent = "";
+  const view = currentView();
+
+  if (!view) {
+    root.appendChild(el("div", { class: "muted", text: "Waiting for an EDGE view." }));
+    return;
+  }
+
+  root.appendChild(el("h3", { text: view.title }));
+  if (view.summary) root.appendChild(el("div", { class: "muted", text: view.summary }));
+  (view.components || []).forEach((component) => root.appendChild(renderComponent(view, component)));
+
+  const entered = Object.entries(view.state || {}).filter(([, s]) => s.value !== null && s.value !== undefined);
+  if (entered.length) {
+    root.appendChild(
+      el("div", { class: "provenance", text: `persisted in EDGE: ${entered.map(([k, s]) => `${k}=${s.value}`).join(", ")}` })
+    );
+  }
+}
+
+render();
+
+if (Host.available() && typeof window.openai.setWidgetState === "function") {
+  // Transient only. Semantic values live in EDGE, never here.
+  window.openai.setWidgetState({ rendered_view_id: (currentView() || {}).view_id || null });
+}
+</script>
+</body>
+</html>

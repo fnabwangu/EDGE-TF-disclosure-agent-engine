@@ -29,7 +29,7 @@ from typing import Any, Callable, Dict
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 from api.bridge import HostBridge, UnknownProject
@@ -127,8 +127,33 @@ async def get_view(request: Request) -> JSONResponse:
     )
 
 
+@guarded
+async def mcp_rpc(request: Request) -> JSONResponse:
+    from api.mcp import MCPToolServer
+    from api.mcp_rpc import MCPJsonRpcServer
+
+    server = MCPJsonRpcServer(MCPToolServer(bridge()))
+    message = await request.json()
+
+    if isinstance(message, list):
+        responses = [r for r in (server.handle(m) for m in message) if r is not None]
+        return JSONResponse(responses, status_code=200 if responses else 202)
+
+    response = server.handle(message)
+    return JSONResponse(response) if response is not None else JSONResponse(None, status_code=202)
+
+
+async def widget(request: Request) -> HTMLResponse:
+    """The component itself. Public: it ships no data, only the renderer."""
+    from api.mcp_rpc import load_widget
+
+    return HTMLResponse(load_widget())
+
+
 routes = [
     Route("/health", health, methods=["GET"]),
+    Route("/widget/edge-panel.html", widget, methods=["GET"]),
+    Route("/mcp", mcp_rpc, methods=["POST"]),
     Route("/projects", projects, methods=["GET"]),
     Route("/projects/{project_id}/state", project_state, methods=["GET"]),
     Route("/projects/{project_id}/events", record_event, methods=["POST"]),

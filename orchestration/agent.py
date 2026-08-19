@@ -23,7 +23,7 @@ from approvals.service import ApprovalService
 from orchestration import ui_composer as compose
 from research.catalyst import CatalystPlanner, CatalystStrategy
 from research.funnel import FunnelStage, ResearchFunnel
-from research.lexicon import Stance, TradeKind, expand
+from research.lexicon import Stance, TradeKind, expand, from_keys
 from transactions.schemas import TradeIntent
 from transactions.service import TransactionService
 from ui.registry import approval_inbox, approval_panel, continuity_panel
@@ -103,6 +103,8 @@ class KeywordRouter:
     """Deterministic intent routing, used when no language model is configured."""
 
     PATTERNS = [
+        # A bare continuation must resume from persisted state, not start a search.
+        ("proceed", r"^\s*(go|proceed|continue|carry on|do it|next|ok|okay)\b"),
         ("continuity", r"\b(where (did|were) we|left off|catch me up|recap|resume)\b"),
         ("inbox", r"\b(inbox|waiting on me|pending|approvals?)\b"),
         ("board", r"\b(pipeline|funnel|board|stages?)\b"),
@@ -136,6 +138,7 @@ class ChatAgent:
         "open_thesis",
         "design_trade",
         "catalyst",
+        "proceed",
         "inbox",
         "continuity",
         "board",
@@ -284,12 +287,15 @@ class ChatAgent:
 
     def _do_catalyst(self, query: str = "", stance: Optional[str] = None) -> AgentTurn:
         concept = expand(query)
-        if not concept.matched and self.focus_concept is not None:
+        if not concept.matched:
             # Follow-up such as "what if they are hawkish": keep the event, change the view.
-            carried = self.focus_concept
-            concept.concepts = list(carried.concepts)
-            concept.functions = set(carried.functions)
-            concept.themes = set(carried.themes)
+            carried = self.focus_concept or self._restore_focus()
+            if carried is not None:
+                concept.concepts = list(carried.concepts)
+                concept.functions = set(carried.functions)
+                concept.themes = set(carried.themes)
+                if concept.stance is Stance.UNSPECIFIED:
+                    concept.stance = carried.stance
         if stance:
             try:
                 concept.stance = Stance(stance)
@@ -298,6 +304,8 @@ class ChatAgent:
         if not concept.matched:
             return AgentTurn(reply=self._no_candidates_message(query, concept))
         self.focus_concept = concept
+        self._remember("catalyst_concepts", ",".join(c.key for c in concept.concepts))
+        self._remember("stance", concept.stance.value)
 
         snapshot = self.project_state()
         dates = [d for d in (_as_date(snapshot.value("catalyst_date")), _as_date(snapshot.value("secondary_catalyst_date"))) if d]
@@ -611,6 +619,76 @@ class ChatAgent:
                 f"Earliest valid expiration is {strategy.minimum_expiration()}."
             ),
             view=view,
+        )
+
+    def _do_proceed(self, query: str = "") -> AgentTurn:
+        """'go' means continue from where the project actually is, not start over."""
+        snapshot = self.project_state()
+
+        if self.focus_concept is not None or snapshot.value("catalyst_concepts"):
+            return self._do_catalyst(query="", stance=snapshot.value("stance"))
+
+        ready = [s for s, p in self.funnel.positions.items() if p.intent_id]
+        if ready:
+            return self._do_inbox()
+
+        with_thesis = [s for s, p in self.funnel.positions.items() if p.thesis_id]
+        if with_thesis:
+            return self._do_design_trade(strategy_id=with_thesis[0])
+
+        synthesized = list(self.funnel._synthesis)
+        if synthesized:
+            return self._do_open_thesis(strategy_id=synthesized[0])
+
+        if self.funnel.positions:
+            return self._do_synthesize(strategy_id=next(iter(self.funnel.positions)))
+
+        dated = snapshot.value("catalyst_date") or snapshot.value("secondary_catalyst_date")
+        if dated:
+            return AgentTurn(
+                reply=(
+                    f"I have **{dated}** held as a catalyst date, but no event named against it, "
+                    "so I do not know which instruments express it. Tell me the event - FOMC, "
+                    "Jackson Hole, CPI - and I will plan from that date."
+                )
+            )
+
+        return AgentTurn(
+            reply=(
+                "There is nothing in play in this project yet. Name a theme to research, "
+                "or a dated macro event to trade against."
+            )
+        )
+
+    def _restore_focus(self):
+        """Rebuild catalyst focus from project state; in-memory focus dies with a session."""
+        keys = self.project_state().value("catalyst_concepts")
+        if not keys:
+            return None
+        stance_value = self.project_state().value("stance")
+        try:
+            stance = Stance(stance_value) if stance_value else Stance.UNSPECIFIED
+        except ValueError:
+            stance = Stance.UNSPECIFIED
+        restored = from_keys(str(keys).split(","), stance=stance)
+        if restored.matched:
+            self.focus_concept = restored
+            return restored
+        return None
+
+    def _remember(self, field_id: str, value: Any) -> None:
+        """Agent-authored project state, recorded through the same event path."""
+        if self.project_state().value(field_id) == value:
+            return
+        self.workbench.record_ui_event(
+            UIEvent.field_changed(
+                view_id="agent",
+                project_id=self.project_id,
+                session_id=self.session_id,
+                field_id=field_id,
+                value=value,
+                actor="EDGE_TF",
+            )
         )
 
     def _do_inbox(self, query: str = "") -> AgentTurn:

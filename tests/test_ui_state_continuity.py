@@ -173,6 +173,32 @@ def test_missing_required_fields_are_reportable(agent):
     assert "catalyst_date" not in {spec.field_id for spec in missing_required(turn.view)}
 
 
+def test_go_resumes_a_catalyst_in_a_brand_new_session(stack, agent, tmp_path):
+    """In-memory focus dies with the agent; persisted focus must not."""
+    agent.send("trade FOMC into Jackson Hole")
+    change(agent, "catalyst_date", "2026-08-27")
+
+    later = stack.workbench.open_session(project_id="fomc-jackson-hole")
+    fresh = ChatAgent(
+        funnel=ResearchFunnel(as_of=date(2026, 8, 18), storage_dir=tmp_path / "sim2"),
+        workbench=stack.workbench,
+        transactions=stack.transactions,
+        approvals=stack.approvals,
+        project_id="fomc-jackson-hole",
+        session_id=later.session_id,
+        user_id="op-1",
+    )
+    assert fresh.focus_concept is None
+
+    turn = fresh.send("go")
+    assert "2026-08-27" in turn.reply
+    assert "FOMC" in turn.reply
+
+
+def test_proceed_without_anything_in_play_says_so(agent):
+    assert "nothing in play" in agent.send("go").reply
+
+
 def test_hydration_fills_declared_controls_from_a_snapshot():
     from ui.schemas import ComponentType, GenerativeView, UIComponent
     from ui.state import FieldSpec

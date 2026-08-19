@@ -37,6 +37,8 @@ Intents:
 - design_trade    args: {"query": "..."}   size and price an implementation
 - catalyst        args: {"query": "...", "stance": "HAWKISH|DOVISH|VOLATILITY"}  a DATED macro event
                   (FOMC, Jackson Hole, CPI, payrolls, elections) rather than an adoption theme
+- proceed         args: {}   a bare continuation such as "go", "continue", "do it" - resume from
+                  whatever the project state already holds
 - inbox           args: {}   what needs a human decision
 - continuity      args: {}   what carried over from previous sessions
 - board           args: {}   pipeline status
