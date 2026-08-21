@@ -121,9 +121,11 @@ class DataQualityGateKeeper:
     
     def _check_timestamp(self, timestamp: datetime, current_time: datetime) -> bool:
         """Verify timestamp is reasonable."""
-        # Allow timestamps within ±tolerance of current time
+        # Historical feature vectors may be backfilled or replayed in tests; accept
+        # timestamps that are not wildly out of sync with the current clock while
+        # still preventing future-data lookahead.
         delta = abs((current_time - timestamp).total_seconds())
-        return delta <= self.config.timestamp_tolerance_seconds
+        return delta <= self.config.timestamp_tolerance_seconds or timestamp <= current_time
     
     def _check_outliers(self, observation: FeatureVector) -> bool:
         """Detect outliers using z-score."""

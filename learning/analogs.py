@@ -11,7 +11,7 @@ Finds analogs before ML prediction so models work on grounded evidence.
 
 import math
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from dataclasses import dataclass
 
 from learning.schemas import (
@@ -109,53 +109,77 @@ class SimilarityCalculator:
         weighted_sum += components["event_type"] * self.component_weights["event_type"]
         
         # Region (categorical)
-        components["region"] = (
-            1.0 if current.region == historical.region else 0.5
-        ) if current.region and historical.region else 0.5
+        if current.region is None and historical.region is None:
+            components["region"] = 1.0
+        elif current.region and historical.region:
+            components["region"] = 1.0 if current.region == historical.region else 0.5
+        else:
+            components["region"] = 0.5
         weighted_sum += components["region"] * self.component_weights["region"]
         
         # Commodity (categorical)
-        components["commodity"] = (
-            1.0 if current.commodity == historical.commodity else 0.5
-        ) if current.commodity and historical.commodity else 0.5
+        if current.commodity is None and historical.commodity is None:
+            components["commodity"] = 1.0
+        elif current.commodity and historical.commodity:
+            components["commodity"] = 1.0 if current.commodity == historical.commodity else 0.5
+        else:
+            components["commodity"] = 0.5
         weighted_sum += components["commodity"] * self.component_weights["commodity"]
         
         # Supply impact (scalar)
-        components["supply_impact"] = self._scalar_similarity(
-            current.supply_impact,
-            historical.supply_impact,
-        )
+        if current.supply_impact is None and historical.supply_impact is None:
+            components["supply_impact"] = 1.0
+        else:
+            components["supply_impact"] = self._scalar_similarity(
+                current.supply_impact,
+                historical.supply_impact,
+            )
         weighted_sum += components["supply_impact"] * self.component_weights["supply_impact"]
         
         # Shipping impact
-        components["shipping_impact"] = self._scalar_similarity(
-            current.shipping_impact,
-            historical.shipping_impact,
-        )
+        if current.shipping_impact is None and historical.shipping_impact is None:
+            components["shipping_impact"] = 1.0
+        else:
+            components["shipping_impact"] = self._scalar_similarity(
+                current.shipping_impact,
+                historical.shipping_impact,
+            )
         weighted_sum += components["shipping_impact"] * self.component_weights["shipping_impact"]
         
         # Policy mechanism
-        components["policy_mechanism"] = (
-            1.0 if current.policy_mechanism == historical.policy_mechanism else 0.5
-        ) if current.policy_mechanism and historical.policy_mechanism else 0.5
+        if current.policy_mechanism is None and historical.policy_mechanism is None:
+            components["policy_mechanism"] = 1.0
+        elif current.policy_mechanism and historical.policy_mechanism:
+            components["policy_mechanism"] = 1.0 if current.policy_mechanism == historical.policy_mechanism else 0.5
+        else:
+            components["policy_mechanism"] = 0.5
         weighted_sum += components["policy_mechanism"] * self.component_weights["policy_mechanism"]
         
         # Market regime
-        components["market_regime"] = (
-            1.0 if current.market_regime == historical.market_regime else 0.3
-        ) if current.market_regime and historical.market_regime else 0.3
+        if current.market_regime is None and historical.market_regime is None:
+            components["market_regime"] = 1.0
+        elif current.market_regime and historical.market_regime:
+            components["market_regime"] = 1.0 if current.market_regime == historical.market_regime else 0.3
+        else:
+            components["market_regime"] = 0.3
         weighted_sum += components["market_regime"] * self.component_weights["market_regime"]
         
         # Volatility regime
-        components["volatility_regime"] = (
-            1.0 if current.volatility_regime == historical.volatility_regime else 0.3
-        ) if current.volatility_regime and historical.volatility_regime else 0.3
+        if current.volatility_regime is None and historical.volatility_regime is None:
+            components["volatility_regime"] = 1.0
+        elif current.volatility_regime and historical.volatility_regime:
+            components["volatility_regime"] = 1.0 if current.volatility_regime == historical.volatility_regime else 0.3
+        else:
+            components["volatility_regime"] = 0.3
         weighted_sum += components["volatility_regime"] * self.component_weights["volatility_regime"]
         
         # Macro backdrop
-        components["macro_backdrop"] = (
-            1.0 if current.macro_backdrop == historical.macro_backdrop else 0.2
-        ) if current.macro_backdrop and historical.macro_backdrop else 0.2
+        if current.macro_backdrop is None and historical.macro_backdrop is None:
+            components["macro_backdrop"] = 1.0
+        elif current.macro_backdrop and historical.macro_backdrop:
+            components["macro_backdrop"] = 1.0 if current.macro_backdrop == historical.macro_backdrop else 0.2
+        else:
+            components["macro_backdrop"] = 0.2
         weighted_sum += components["macro_backdrop"] * self.component_weights["macro_backdrop"]
         
         return weighted_sum, components
@@ -502,7 +526,7 @@ class AnalogEngine:
         return AnalogSet(
             setup_id="current_setup",
             current_fingerprint=current_setup,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             event_analogs=event_matches,
             trade_analogs=trade_matches,
             outcome_statistics=outcome_stats,

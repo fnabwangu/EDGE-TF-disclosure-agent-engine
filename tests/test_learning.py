@@ -255,7 +255,7 @@ class TestModelEvaluation(unittest.TestCase):
             out_of_sample_sample_size=100,
             metrics=metrics,
             model_code_version="1.0",
-            model_config={},
+            model_parameters={},
             status="draft",
         )
         
@@ -388,7 +388,7 @@ class TestLearningOrchestrator(unittest.TestCase):
         self.assertEqual(len(labels), 4)
         
         # 3. Retrieve analogs
-        analogs = orchestrator.find_analogs(
+        analogs = self.orchestrator.find_analogs(
             event_type="sanctions",
             region="middle_east",
             min_similarity=0.50,

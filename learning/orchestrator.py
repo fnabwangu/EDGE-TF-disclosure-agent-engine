@@ -308,7 +308,7 @@ class LearningOrchestrator:
             out_of_sample_sample_size=run.out_of_sample_examples_total,
             metrics=run.average_metrics,
             model_code_version="1.0",
-            model_config={"walk_forward_splits": run.walk_forward_splits},
+            model_parameters={"walk_forward_splits": run.walk_forward_splits},
             status="draft",
             predecessor_version=None,
             promotion_history=[],

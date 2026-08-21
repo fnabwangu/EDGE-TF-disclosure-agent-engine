@@ -14,7 +14,7 @@ Pydantic models for:
 from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FeatureVector(BaseModel):
@@ -64,6 +64,8 @@ class ModelMetrics(BaseModel):
 
 class ModelCard(BaseModel):
     """Versioned model record with full metadata."""
+    model_config = ConfigDict(populate_by_name=True)
+
     model_id: str
     model_type: Literal["return", "drawdown", "thesis_success", "hedge_effectiveness"]
     version: str
@@ -76,7 +78,11 @@ class ModelCard(BaseModel):
     out_of_sample_sample_size: int
     metrics: ModelMetrics
     model_code_version: str
-    model_config: Dict[str, Any]
+    model_parameters: Dict[str, Any] = Field(
+        default_factory=dict,
+        alias="model_config",
+        serialization_alias="model_config",
+    )
     status: Literal["draft", "challenger", "champion", "retired"]
     predecessor_version: Optional[str] = None
     promotion_history: List[Dict[str, Any]] = Field(default_factory=list)
