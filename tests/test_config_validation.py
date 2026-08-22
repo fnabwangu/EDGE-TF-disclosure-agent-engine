@@ -18,6 +18,7 @@ def test_all_root_configs_are_valid_json_and_schema_compliant():
         "execution_routing.json",
         "fund_universe.json",
         "governance_policy.json",
+        "learning_policy.json",
         "rebalance_schedule.json",
         "risk_parameters.json",
         "strategy_ontology.json",

@@ -21,6 +21,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Protocol
 
+from execution.contracts import ExecutionReport, ExecutionReportStatus
 from execution.order_router import OrderRequest, OrderRouter
 from transactions.preview import (
     MAX_ACCEPTABLE_SPREAD_PCT,
@@ -37,10 +38,20 @@ from transactions.schemas import (
     TransactionState,
     canonical_hash,
 )
-from transactions.state_machine import assert_transition
+from transactions.state_machine import assert_transition, can_transition
 from transactions.validator import validate_intent
 
 MATERIAL_PRICE_DRIFT_PCT = 0.005
+
+# Broker-reported outcomes that do not map to a state change are logged only.
+_REPORT_TARGET_BY_STATUS: Dict[ExecutionReportStatus, Optional[TransactionState]] = {
+    ExecutionReportStatus.ACCEPTED: None,
+    ExecutionReportStatus.PARTIALLY_FILLED: TransactionState.PARTIALLY_FILLED,
+    ExecutionReportStatus.FILLED: TransactionState.FILLED,
+    ExecutionReportStatus.CANCELLED: TransactionState.CANCELLED,
+    ExecutionReportStatus.REJECTED: TransactionState.ERROR,
+    ExecutionReportStatus.ERROR: TransactionState.ERROR,
+}
 
 
 class QuoteProvider(Protocol):
@@ -141,6 +152,107 @@ class TransactionService:
 
     def execute(self, intent_id: str, *, user_id: str) -> TransactionRecord:
         record = self.get(intent_id)
+        fresh = self._revalidate_for_execution(record, user_id=user_id)
+        if fresh is None:
+            return record
+
+        self._set_state(record, TransactionState.SUBMITTING)
+        request = OrderRequest(
+            symbol=fresh.symbol,
+            quantity=fresh.quantity,
+            side=fresh.side,
+            order_type="LIMIT",
+            limit_price=fresh.estimated_price,
+        )
+        response = self.router.route(request, execution_permitted=True)
+        record.broker_response = response
+
+        if str(response.get("status", "")).upper() == "REJECTED":
+            self._set_state(record, TransactionState.REJECTED, {"broker": response})
+        else:
+            self._set_state(record, TransactionState.SUBMITTED, {"broker": response})
+        return record
+
+    # -- external execution channel -----------------------------------------
+    # The broker-facing executor is a separate service. It can only ever see
+    # trades in state APPROVED, and claiming one runs the same revalidation
+    # as the in-process path before the handoff is recorded.
+
+    def executable(self) -> List[TransactionRecord]:
+        """Approved, unexpired trades the external execution service may claim."""
+        if self._kill_switch_locked():
+            return []
+        return [
+            record
+            for record in self._records.values()
+            if record.state is TransactionState.APPROVED
+            and record.preview is not None
+            and record.approval is not None
+            and not record.approval.is_expired()
+        ]
+
+    def claim_for_external_execution(
+        self,
+        intent_id: str,
+        *,
+        executor_id: str,
+        user_id: str = "EXTERNAL_EXECUTION_SERVICE",
+    ) -> TransactionRecord:
+        """Hand an approved trade to the external execution service.
+
+        Runs the identical revalidation as `execute`; on success the record
+        moves APPROVED -> REVALIDATING -> SUBMITTING -> SUBMITTED with a
+        handoff marker in place of a broker response. Only one claim can ever
+        succeed: a second claim hits the whitelisted state machine and fails.
+        """
+        record = self.get(intent_id)
+        fresh = self._revalidate_for_execution(record, user_id=user_id)
+        if fresh is None:
+            return record
+
+        self._set_state(record, TransactionState.SUBMITTING)
+        handoff = {
+            "status": "HANDED_OFF",
+            "channel": "EXTERNAL",
+            "executor_id": executor_id,
+            "claimed_by": user_id,
+        }
+        record.broker_response = handoff
+        self._set_state(record, TransactionState.SUBMITTED, {"handoff": handoff})
+        return record
+
+    def record_execution_report(self, intent_id: str, report: ExecutionReport) -> TransactionRecord:
+        """Fold a broker outcome reported by the execution service into the record.
+
+        Never raises on stale or out-of-order reports: anything the whitelisted
+        state machine cannot absorb is logged to the record history instead, so
+        the audit trail keeps every report exactly as received.
+        """
+        record = self.get(intent_id)
+        detail = report.model_dump(mode="json")
+        target = _REPORT_TARGET_BY_STATUS.get(report.status)
+
+        if target is None or target is record.state:
+            self._log(record, f"EXECUTION_REPORT:{report.status.value}", detail)
+            return record
+
+        if target is TransactionState.CANCELLED and record.state is not TransactionState.CANCEL_REQUESTED:
+            if can_transition(record.state, TransactionState.CANCEL_REQUESTED):
+                self._set_state(record, TransactionState.CANCEL_REQUESTED, {"report": detail})
+
+        if can_transition(record.state, target):
+            self._set_state(record, target, {"report": detail})
+        else:
+            self._log(record, f"EXECUTION_REPORT_IGNORED:{report.status.value}", detail)
+        return record
+
+    def _revalidate_for_execution(self, record: TransactionRecord, *, user_id: str) -> Optional[TransactionPreview]:
+        """Fresh-quote, fresh-risk revalidation shared by `execute` and `claim`.
+
+        Returns the fresh preview with the record left in REVALIDATING (ready
+        for SUBMITTING), or None after moving the record to the appropriate
+        expired/rejected/kill-switched state.
+        """
         approval = record.approval
         prior = record.preview
         if approval is None or prior is None:
@@ -150,13 +262,13 @@ class TransactionService:
 
         if self._kill_switch_locked():
             self._set_state(record, TransactionState.KILL_SWITCHED, {"reason": "KILL_SWITCH_LOCKED"})
-            return record
+            return None
         if approval.is_expired():
             self._set_state(record, TransactionState.APPROVAL_EXPIRED, {"reason": "APPROVAL_TTL_ELAPSED"})
-            return record
+            return None
         if canonical_hash(record.intent.economic_fingerprint()) != record.approved_fingerprint:
             self._set_state(record, TransactionState.APPROVAL_EXPIRED, {"reason": "INTENT_MUTATED"})
-            return record
+            return None
 
         validation = validate_intent(record.intent)
         portfolio = self.portfolio.snapshot()
@@ -176,31 +288,16 @@ class TransactionService:
         if drift:
             record.preview = fresh
             self._set_state(record, TransactionState.APPROVAL_EXPIRED, {"drift": drift})
-            return record
+            return None
 
         blockers = self._blockers(fresh)
         if blockers:
             record.preview = fresh
             self._set_state(record, TransactionState.REJECTED, {"blockers": blockers})
-            return record
+            return None
 
         record.preview = fresh
-        self._set_state(record, TransactionState.SUBMITTING)
-        request = OrderRequest(
-            symbol=fresh.symbol,
-            quantity=fresh.quantity,
-            side=fresh.side,
-            order_type="LIMIT",
-            limit_price=fresh.estimated_price,
-        )
-        response = self.router.route(request, execution_permitted=True)
-        record.broker_response = response
-
-        if str(response.get("status", "")).upper() == "REJECTED":
-            self._set_state(record, TransactionState.REJECTED, {"broker": response})
-        else:
-            self._set_state(record, TransactionState.SUBMITTED, {"broker": response})
-        return record
+        return fresh
 
     def cancel(self, intent_id: str, *, reason: str = "USER_CANCELLED") -> TransactionRecord:
         record = self.get(intent_id)

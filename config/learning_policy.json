@@ -1,18 +1,3 @@
-"""
-Learning Engine policy configuration.
-
-Path: config/learning_policy.json
-
-Governance configuration for the Learning Engine:
-- Data quality gate thresholds
-- Model evaluation gate thresholds
-- Champion/challenger promotion policy
-- Model performance requirements
-- Risk limits for predictions
-
-All policy changes require approval and create audit records.
-"""
-
 {
   "metadata": {
     "version": "1.0",
