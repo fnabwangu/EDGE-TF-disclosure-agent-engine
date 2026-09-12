@@ -47,7 +47,7 @@ class DimensionalOutcome:
     evidence: List[str] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TradeAttributionResult:
     """Complete attribution breakdown for a trade."""
     trade_id: str
@@ -101,7 +101,7 @@ class StrategyAttributor:
         exit_price: float,
         max_price_during_trade: float,
         min_price_during_trade: float,
-        
+        *,
         # Expected values at entry
         expected_return: float,
         expected_thesis_description: str,
